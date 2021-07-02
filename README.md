@@ -26,10 +26,10 @@ python generate.py
 
 ## Arguments
 ```
-generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS] [-nps NOISE_PROMPT_SEEDS]
-[-npw NOISE_PROMPT_WEIGHTS] [-s SIZE SIZE] [-ii INIT_IMAGE] [-iw INIT_WEIGHT] [-m CLIP_MODEL]
-[-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW]
-[-se DISPLAY_FREQ] [-sd SEED]
+generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
+[-nps NOISE_PROMPT_SEEDS] [-npw NOISE_PROMPT_WEIGHTS] [-s SIZE SIZE] [-ii INIT_IMAGE]
+[-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT]
+[-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ] [-sd SEED]
 ```
 
 ```
