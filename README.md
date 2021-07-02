@@ -2,6 +2,8 @@
 Just me playing with getting VQGAN + CLIP running locally, rather than having to use colab.
 Taken from the following google colab - https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ
 
+Still a work in progress
+
 # Install
 ```
 conda create --name vqgan python=3.9
