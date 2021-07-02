@@ -20,7 +20,9 @@ pip install ftfy regex tqdm omegaconf pytorch-lightning IPython
 pip install kornia imageio imageio-ffmpeg einops 
 ```
 # Run
+```
 python generate.py
+```
 
 ## Arguments
 ```
