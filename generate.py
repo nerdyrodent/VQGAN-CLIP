@@ -28,25 +28,6 @@ import imageio
 from PIL import ImageFile, Image
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-# Config - change this stuff
-texts = "A picture of an Ewok crossed with a badger"
-init_image = ""
-target_images = ""
-
-width =  512		# 480
-height = 512		# 480
-
-learning_rate = 0.25	# 0.1
-max_iterations = 666	# 550
-num_cuts = 32		# 32
-cut_power = 1.		# 1.
-
-seed = None		# None = random seed
-save_image_interval = 100
-model = "vqgan_imagenet_f16_16384" # "vqgan_imagenet_f16_16384", "vqgan_imagenet_f16_1024", "vqgan_openimages_f16_8192", "wikiart_1024", "wikiart_16384", "coco", "faceshq", "sflckr"
-
-# Config end
-###########################
 
 '''
 # Download models
@@ -267,60 +248,63 @@ def resize_image(image, out_size):
 
 
 # Settings for this run
-model_names={"vqgan_imagenet_f16_16384": 'ImageNet 16384',"vqgan_imagenet_f16_1024":"ImageNet 1024", 'vqgan_openimages_f16_8192':'OpenImages 8912',
-                 "wikiart_1024":"WikiArt 1024", "wikiart_16384":"WikiArt 16384", "coco":"COCO-Stuff", "faceshq":"FacesHQ", "sflckr":"S-FLCKR"}
-name_model = model_names[model]     
 
-if seed == -1:
-    seed = None
-if init_image == "None":
-    init_image = None
-if target_images == "None" or not target_images:
-    target_images = []
-else:
-    target_images = target_images.split("|")
-    target_images = [image.strip() for image in target_images]
+# Create the parser
+vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
-texts = [phrase.strip() for phrase in texts.split("|")]
-if texts == ['']:
-    texts = []
+# Add the arguments
+vq_parser.add_argument("-p", "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
+vq_parser.add_argument("-o", "--output", type=int, help="Number of iterations", default=500, dest='output')
+vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
+vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
+vq_parser.add_argument("-nps", "--noise_prompt_seeds", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
+vq_parser.add_argument("-npw", "--noise_prompt_weights", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_weights')
+vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width, height)", default=[512,512], dest='size')
+vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
+vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
+vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
+vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
+vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=f'checkpoints/vqgan_imagenet_f16_16384.ckpt', dest='vqgan_checkpoint')
+vq_parser.add_argument("-lr", "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
+vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
+vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
+vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
+vq_parser.add_argument("-sd", "--seed", type=int, help="Save image iterations", default=None, dest='seed')
 
+# Execute the parse_args() method
+args = vq_parser.parse_args()
 
-args = argparse.Namespace(
-    prompts=texts,
-    image_prompts=target_images,
-    noise_prompt_seeds=[],
-    noise_prompt_weights=[],
-    size=[width, height],
-    init_image=init_image,
-    init_weight=0.,
-    clip_model='ViT-B/32',
-    vqgan_config=f'checkpoints/{model}.yaml',
-    vqgan_checkpoint=f'checkpoints/{model}.ckpt',
-    step_size=learning_rate,
-    cutn=num_cuts,
-    cut_pow=cut_power,
-    display_freq=save_image_interval,
-    seed=seed,
-)
+# Split text prompts using the pipe character
+if args.prompts:
+    args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
+
+# Split target images using the pipe character
+if args.image_prompts:
+    args.image_prompts = args.image_prompts.split("|")
+    args.image_prompts = [image.strip() for image in args.image_prompts]
 
 
 # Do it
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+# Output for the user
 print('Using device:', device)
-if texts:
-    print('Using texts:', texts)
-if target_images:
-    print('Using image prompts:', target_images)
+
+if args.prompts:
+    print('Using text prompts:', args.prompts)  
+if args.image_prompts:
+    print('Using image prompts:', image_prompts)
+    
 if args.seed is None:
     seed = torch.seed()
 else:
-    seed = args.seed
+    seed = args.seed  
 torch.manual_seed(seed)
 print('Using seed:', seed)
 
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
-perceptor = clip.load(args.clip_model, jit=False)[0].eval().requires_grad_(False).to(device)
+perceptor = clip.load(args.clip_model, jit=False)[0].eval().requires_grad_(False).to(device)	# jit=False for PyTorch > 1.7.1
+
 # clock=deepcopy(perceptor.visual.positional_embedding.data)
 # perceptor.visual.positional_embedding.data = clock/clock.max()
 # perceptor.visual.positional_embedding.data=clamp_with_grad(clock,0,1)
@@ -333,7 +317,7 @@ make_cutouts = MakeCutouts(cut_size, args.cutn, cut_pow=args.cut_pow)
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
 
-if args.vqgan_checkpoint == 'vqgan_openimages_f16_8192.ckpt':
+if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':			# NR: Should handle this better
     e_dim = 256
     n_toks = model.quantize.n_embed
     z_min = model.quantize.embed.weight.min(dim=0).values[None, :, None, None]
@@ -361,7 +345,7 @@ if args.init_image:
 else:
     one_hot = F.one_hot(torch.randint(n_toks, [toksY * toksX], device=device), n_toks).float()
     # z = one_hot @ model.quantize.embedding.weight
-    if args.vqgan_checkpoint == 'vqgan_openimages_f16_8192.ckpt':
+    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':		# NR: Should handle this better
         z = one_hot @ model.quantize.embed.weight
     else:
         z = one_hot @ model.quantize.embedding.weight
@@ -370,7 +354,7 @@ else:
 z_orig = z.clone()
 z.requires_grad_(True)
 
-# Set the optimiser
+# Set the optimiser										# NR: Play
 #opt = optim.Adam([z], lr=args.step_size)	# LR=0.1
 opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2
 #opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
@@ -394,14 +378,14 @@ for prompt in args.image_prompts:
     embed = perceptor.encode_image(normalize(batch)).float()
     pMs.append(Prompt(embed, weight, stop).to(device))
 
-for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
+for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):			# NR: weights
     gen = torch.Generator().manual_seed(seed)
     embed = torch.empty([1, perceptor.visual.output_dim]).normal_(generator=gen)
     pMs.append(Prompt(embed, weight).to(device))
 
 
 def synth(z):
-    if args.vqgan_checkpoint == 'vqgan_openimages_f16_8192.ckpt':
+    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':		# NR: Should handle this better
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)
     else:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embedding.weight).movedim(3, 1)
@@ -413,7 +397,7 @@ def checkin(i, losses):
     losses_str = ', '.join(f'{loss.item():g}' for loss in losses)
     tqdm.write(f'i: {i}, loss: {sum(losses).item():g}, losses: {losses_str}')
     out = synth(z)
-    TF.to_pil_image(out[0].cpu()).save('progress.png')
+    TF.to_pil_image(out[0].cpu()).save('progress.png') 					# NR: Change name for the save
 
 
 def ascend_txt():
@@ -431,7 +415,7 @@ def ascend_txt():
         
     img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
     img = np.transpose(img, (1, 2, 0))
-    #imageio.imwrite('./steps/' + str(i) + '.jph', np.array(img))	# Save image in steps dir
+    #imageio.imwrite('./steps/' + str(i) + '.jpg', np.array(img))				# NR: Save image in steps dir - removed for now (can use for video)
 
     return result
 
@@ -456,7 +440,7 @@ try:
     with tqdm() as pbar:
         while True:
             train(i)
-            if i == max_iterations:
+            if i == args.max_iterations:
                 break
             i += 1
             pbar.update()
