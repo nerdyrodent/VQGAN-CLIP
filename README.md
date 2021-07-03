@@ -1,6 +1,11 @@
 # VQGAN-CLIP Overview
-Just me playing with Katherine Crowson's VQGAN+CLIP running locally, rather than having to use colab.
-This code is based on the following google colab - https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ
+A repo for running VQGAN+CLIP locally. This started out as a Katherine Crowson VQGAN+CLIP derived Google colab notebook.
+
+Original notebook [![Open In Colab][colab-badge]][colab-notebook]
+
+[colab-notebook]: <https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ>
+[colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
+
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
 
