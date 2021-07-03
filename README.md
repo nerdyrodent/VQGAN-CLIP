@@ -1,6 +1,8 @@
 # VQGAN-CLIP
-Just me playing with getting VQGAN + CLIP running locally, rather than having to use colab.
+Just me playing with getting VQGAN+CLIP running locally, rather than having to use colab.
 Taken from the following google colab - https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ
+
+Tested on Ubuntu 20.04, Nvidia RTX 3090.
 
 Still a work in progress
 
@@ -24,7 +26,15 @@ pip install kornia imageio imageio-ffmpeg einops
 python generate.py
 ```
 
-## Arguments
+## Multiple prompts
+
+Text and image prompts can be split using the pipe symbol, "|". For example:
+
+```
+python generate.py -p "A picture of a snowflake | zoom | high definition"
+```
+
+## Advanced options
 ```
 generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
 [-nps NOISE_PROMPT_SEEDS] [-npw NOISE_PROMPT_WEIGHTS] [-s SIZE SIZE] [-ii INIT_IMAGE]
