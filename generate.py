@@ -259,7 +259,7 @@ vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iteration
 vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
 vq_parser.add_argument("-nps", "--noise_prompt_seeds", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
 vq_parser.add_argument("-npw", "--noise_prompt_weights", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_weights')
-vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width, height)", default=[512,512], dest='size')
+vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
 vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
 vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
 vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
@@ -293,7 +293,7 @@ print('Using device:', device)
 if args.prompts:
     print('Using text prompts:', args.prompts)  
 if args.image_prompts:
-    print('Using image prompts:', image_prompts)
+    print('Using image prompts:', args.image_prompts)
     
 if args.seed is None:
     seed = torch.seed()
@@ -397,7 +397,7 @@ def checkin(i, losses):
     losses_str = ', '.join(f'{loss.item():g}' for loss in losses)
     tqdm.write(f'i: {i}, loss: {sum(losses).item():g}, losses: {losses_str}')
     out = synth(z)
-    TF.to_pil_image(out[0].cpu()).save(args.output) 					# NR: Change name for the save
+    TF.to_pil_image(out[0].cpu()).save(args.output) 						
 
 
 def ascend_txt():
