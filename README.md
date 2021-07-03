@@ -7,6 +7,8 @@ Tested on Ubuntu 20.04, Nvidia RTX 3090.
 Still a work in progress
 
 # Install
+Using Anaconda to create virtual environments for Python:
+
 ```
 conda create --name vqgan python=3.9
 conda activate vqgan
@@ -21,13 +23,13 @@ pip install ftfy regex tqdm omegaconf pytorch-lightning IPython
 
 pip install kornia imageio imageio-ffmpeg einops 
 ```
+
 # Run
 ```
 python generate.py
 ```
 
 ## Multiple prompts
-
 Text and image prompts can be split using the pipe symbol, "|". For example:
 
 ```
