@@ -1,13 +1,13 @@
-# VQGAN-CLIP
-Just me playing with getting VQGAN+CLIP running locally, rather than having to use colab.
+# VQGAN-CLIP Overview
+Just me playing with Katherine Crowson's VQGAN+CLIP running locally, rather than having to use colab.
 This code is based on the following google colab - https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
 
 Still a work in progress :)
 
-# Install
-Using Anaconda to create virtual environments for Python:
+# Set up
+Example set up using Anaconda to create a virtual Python environment with the prerequisites:
 
 ```
 conda create --name vqgan python=3.9
@@ -39,17 +39,22 @@ python generate.py -p "A picture of a snowflake | zoom | high definition"
 You can also use image and text prompts together. For example:
 
 ```
-python generate.py -p "A portrait of a face | Picasso" -ip /Pictures/A_Face.jpg -o MyNewFace.png
+python generate.py -p "A portrait of a face | Picasso" -ip "/Pictures/A_Face.jpg | /Pictures/B_Face.png" -o MyNewFace.png
 ```
 
 ## "Style Transfer"
-Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer". For example:
+Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
 
 ```
 python generate.py -p="A pencil sketch" -ii=/Pictures/A_Face.jpg -i=100 -se=25 -lr=0.215 -o=Face_pencil_sketch.png
 ```
 
 ## Advanced options
+To view the available options, use "-h".
+```
+python generate.py -h
+```
+
 ```
 generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
 [-nps NOISE_PROMPT_SEEDS] [-npw NOISE_PROMPT_WEIGHTS] [-s SIZE SIZE] [-ii INIT_IMAGE]
