@@ -42,6 +42,13 @@ You can also use image and text prompts together. For example:
 python generate.py -p "A portrait of a face | Picasso" -ip /Pictures/A_Face.jpg -o MyNewFace.png
 ```
 
+## "Style Transfer"
+Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer". For example:
+
+```
+python generate.py -p="A pencil sketch" -ii=/Pictures/A_Face.jpg -i=100 -se=25 -lr=0.215 -o=Face_pencil_sketch.png
+```
+
 ## Advanced options
 ```
 generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
