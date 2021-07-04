@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.request import urlopen
 from tqdm import tqdm
 import sys
+sys.path.append('taming-transformers')
 
 from base64 import b64encode
 from omegaconf import OmegaConf
