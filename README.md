@@ -58,7 +58,7 @@ python generate.py -p "A portrait of a face | Picasso" -ip "/Pictures/A_Face.jpg
 Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
 
 ```
-python generate.py -p "A pencil sketch" -ii /Pictures/A_Face.jpg -i 80 -se 20 -opt AdamW -lr 0.25 -o=Face_pencil_sketch.png
+python generate.py -p "A pencil sketch" -ii /Pictures/A_Face.jpg -i 80 -se 20 -opt AdamW -lr 0.25 -o Face_pencil_sketch.png
 ```
 
 ## Advanced options
