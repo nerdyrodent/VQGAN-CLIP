@@ -155,4 +155,6 @@ optional arguments:
       primaryClass={cs.CV}
 }
 ```
+Katherine Crowson - https://github.com/crowsonkb
+
 Public Domain images from Open Access Images at the Art Institute of Chicago - https://www.artic.edu/open-access/open-access-images
