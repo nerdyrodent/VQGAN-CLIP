@@ -79,7 +79,7 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 | <img src="./samples/vvg_psychedelic.png" width="256px"></img>  | Psychedelic  |
 
 ## Feedback example
-By feeding back the generated images and making slight changes, some interesting effects can be generated.
+By feeding back the generated images and making slight changes, some interesting effects can be created.
 
 The example `zoom.sh` shows this by applying a zoom and rotate to generated images, before feeding them back in again.
 To use `zoom.sh`, specifying a text prompt, output filename and number of frames. E.g.
