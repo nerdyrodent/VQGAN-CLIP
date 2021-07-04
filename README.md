@@ -78,10 +78,13 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 | <img src="./samples/vvg_sketch.png" width="256px"></img>  | Sketch  |
 | <img src="./samples/vvg_psychedelic.png" width="256px"></img>  | Psychedelic  |
 
-## Zoom Movie
-You can also create zooming movies using `zoom.sh` and specifying a text prompt, output filename and number for frames. For example:
+## Feedback example
+By feeding back the generated images and making slight changes, some interesting effects can be generated.
+
+The example `zoom.sh` shows this by applying a zoom and rotate to generated images, before feeding them back in again.
+To use `zoom.sh`, specifying a text prompt, output filename and number of frames. E.g.
 ```
-./zoom.sh "A painting of zooming in to a surreal, alien world" zoom.png 120
+./zoom.sh "A painting of a red telephone box spinning through a time vortex" test2/Telephone.png 150
 ```
 <img src="./samples/zoom.gif" width="256px"></img>
 
