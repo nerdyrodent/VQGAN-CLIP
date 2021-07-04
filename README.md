@@ -6,6 +6,7 @@ Original notebook [![Open In Colab][colab-badge]][colab-notebook]
 [colab-notebook]: <https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
 
+See https://github.com/CompVis/taming-transformers for information on datasets and models.
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
 
