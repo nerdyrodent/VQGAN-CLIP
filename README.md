@@ -1,5 +1,6 @@
 # VQGAN-CLIP Overview
 A repo for running VQGAN+CLIP locally. This started out as a Katherine Crowson VQGAN+CLIP derived Google colab notebook.
+
 Original notebook: [![Open In Colab][colab-badge]][colab-notebook]
 
 [colab-notebook]: <https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ>
@@ -76,6 +77,12 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 | <img src="./samples/vvg_picasso.png" width="256px"></img> | Picasso |
 | <img src="./samples/vvg_sketch.png" width="256px"></img>  | Sketch  |
 | <img src="./samples/vvg_psychedelic.png" width="256px"></img>  | Psychedelic  |
+
+## Zoom Movie
+You can also create zooming movies using `zoom.sh` and specifying a text prompt, output filename and number for frames. For example:
+```
+./zoom.sh "A painting of zooming in to a surreal, alien world" zoom.png 120
+```
 
 ## Advanced options
 To view the available options, use "-h".
