@@ -53,8 +53,9 @@ python generate.py -p "A painting of an apple in a fruit bowl"
 Text and image prompts can be split using the pipe symbol in order to allow multiple prompts. For example:
 
 ```
-python generate.py -p "A sketch of a face | high definition | complex and detailed"
+python generate.py -p "A painting of an apple in a fruit bowl | psychedelic | surreal | weird"
 ```
+<img src="./samples/Apple_weird.png" width="256px"></img>
 
 You can also use image and text prompts together. For example:
 
