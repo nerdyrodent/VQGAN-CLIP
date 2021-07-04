@@ -57,10 +57,10 @@ python generate.py -p "A painting of an apple in a fruit bowl | psychedelic | su
 ```
 <img src="./samples/Apple_weird.png" width="256px"></img>
 
-You can also use image and text prompts together. For example:
+Image prompts can be split in the same way. For example:
 
 ```
-python generate.py -p "A portrait of a face | Picasso" -ip "/Pictures/A_Face.jpg | /Pictures/B_Face.png" -o MyNewFace.png
+python generate.py -p "A picture of a bedroom with a portrait of Van Gogh" -ip "samples/VanGogh.jpg | samples/Bedroom.png"
 ```
 
 ## "Style Transfer"
