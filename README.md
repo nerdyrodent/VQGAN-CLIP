@@ -83,6 +83,7 @@ You can also create zooming movies using `zoom.sh` and specifying a text prompt,
 ```
 ./zoom.sh "A painting of zooming in to a surreal, alien world" zoom.png 120
 ```
+<img src="./samples/zoom.gif" width="256px"></img>
 
 ## Advanced options
 To view the available options, use "-h".
