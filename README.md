@@ -11,9 +11,10 @@ Some example images:
 <img src="./samples/Bedroom.png" width="256px"></img><img src="./samples/DemonBiscuits.png" width="256px"></img><img src="./samples/Football.png" width="256px"></img>
 <img src="./samples/Fractal_Landscape3.png" width="256px"></img><img src="./samples/Games_5.png" width="256px"></img>
 
-
-Tested on Ubuntu 20.04, Nvidia RTX 3090.
-Typical VRAM requirement: 10 GB
+Environment:
+* Tested on Ubuntu 20.04
+* GPU: Nvidia RTX 3090
+* Typical VRAM requirement: 10 GB
 
 Still a work in progress :)
 
