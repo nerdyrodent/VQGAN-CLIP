@@ -74,6 +74,7 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 | ------------- | ------------- |
 | <img src="./samples/vvg_picasso.png" width="256px"></img> | Picasso |
 | <img src="./samples/vvg_sketch.png" width="256px"></img>  | Sketch  |
+| <img src="./samples/vvg_psychedelic.png" width="256px"></img>  | Psychedelic  |
 
 ## Advanced options
 To view the available options, use "-h".
