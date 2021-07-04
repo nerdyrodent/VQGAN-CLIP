@@ -84,7 +84,7 @@ By feeding back the generated images and making slight changes, some interesting
 The example `zoom.sh` shows this by applying a zoom and rotate to generated images, before feeding them back in again.
 To use `zoom.sh`, specifying a text prompt, output filename and number of frames. E.g.
 ```
-./zoom.sh "A painting of a red telephone box spinning through a time vortex" test2/Telephone.png 150
+./zoom.sh "A painting of a red telephone box spinning through a time vortex" Telephone.png 150
 ```
 <img src="./samples/zoom.gif" width="256px"></img>
 
