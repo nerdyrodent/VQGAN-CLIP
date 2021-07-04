@@ -20,7 +20,7 @@ Environment:
   * 10 GB for a 512x512 image
   *  8 GB for a 380x380 image
 
-Still a work in progress :)
+Still a work in progress - I've not actually tested everything yet :)
 
 # Set up
 Example set up using Anaconda to create a virtual Python environment with the prerequisites:
