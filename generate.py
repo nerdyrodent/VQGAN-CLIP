@@ -1,5 +1,5 @@
-# Originally made by Katherine Crowson (https://github.com/crowsonkb, https://twitter.com/RiversHaveWings).
-# The original BigGAN+CLIP method was by https://twitter.com/advadnoun.
+# Originally made by Katherine Crowson (https://github.com/crowsonkb, https://twitter.com/RiversHaveWings)
+# The original BigGAN+CLIP method was by https://twitter.com/advadnoun
 
 import argparse
 import math
@@ -18,7 +18,8 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = False	# NR: True is a bit faster, but can lead to OOM. False is also more deterministic.
+torch.use_deterministic_algorithms(False)
 
 from CLIP import clip
 import kornia.augmentation as K
@@ -29,11 +30,46 @@ from PIL import ImageFile, Image
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
+# Create the parser
+vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
+
+# Add the arguments
+vq_parser.add_argument("-p", "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
+vq_parser.add_argument("-o", "--output", type=str, help="Number of iterations", default="output.png", dest='output')
+vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
+vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
+vq_parser.add_argument("-nps", "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
+vq_parser.add_argument("-npw", "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt seeds", default=[], dest='noise_prompt_weights')
+vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
+vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
+vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
+vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
+vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
+vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=f'checkpoints/vqgan_imagenet_f16_16384.ckpt', dest='vqgan_checkpoint')
+vq_parser.add_argument("-lr", "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
+vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
+vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
+vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
+vq_parser.add_argument("-sd", "--seed", type=int, help="Save image iterations", default=None, dest='seed')
+
+# Execute the parse_args() method
+args = vq_parser.parse_args()
+
+# Split text prompts using the pipe character
+if args.prompts:
+    args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
+    
+# Split target images using the pipe character
+if args.image_prompts:
+    args.image_prompts = args.image_prompts.split("|")
+    args.image_prompts = [image.strip() for image in args.image_prompts]
+
+
 '''
 # Download models
-imagenet_16384 = True
+imagenet_16384 = False
 imagenet_1024 = False
-openimages_8192 = True
+openimages_8192 = False
 wikiart_16384 = False
 wikiart_1024 = False
 coco = False
@@ -247,42 +283,6 @@ def resize_image(image, out_size):
     return image.resize(size, Image.LANCZOS)
 
 
-# Settings for this run
-
-# Create the parser
-vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
-
-# Add the arguments
-vq_parser.add_argument("-p", "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
-vq_parser.add_argument("-o", "--output", type=str, help="Number of iterations", default="output.png", dest='output')
-vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
-vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
-vq_parser.add_argument("-nps", "--noise_prompt_seeds", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
-vq_parser.add_argument("-npw", "--noise_prompt_weights", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_weights')
-vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
-vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
-vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
-vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
-vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=f'checkpoints/vqgan_imagenet_f16_16384.ckpt', dest='vqgan_checkpoint')
-vq_parser.add_argument("-lr", "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
-vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
-vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
-vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
-vq_parser.add_argument("-sd", "--seed", type=int, help="Save image iterations", default=None, dest='seed')
-
-# Execute the parse_args() method
-args = vq_parser.parse_args()
-
-# Split text prompts using the pipe character
-if args.prompts:
-    args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
-
-# Split target images using the pipe character
-if args.image_prompts:
-    args.image_prompts = args.image_prompts.split("|")
-    args.image_prompts = [image.strip() for image in args.image_prompts]
-
 
 # Do it
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -294,6 +294,10 @@ if args.prompts:
     print('Using text prompts:', args.prompts)  
 if args.image_prompts:
     print('Using image prompts:', args.image_prompts)
+if args.init_image:
+    print('Using initial image:', args.init_image)
+if args.noise_prompt_weights:
+    print('Noise prompt weights:', args.noise_prompt_weights)    
     
 if args.seed is None:
     seed = torch.seed()
@@ -338,6 +342,7 @@ if args.init_image:
       img = Image.open(urlopen(args.init_image))
     else:
       img = Image.open(args.init_image)
+
     pil_image = img.convert('RGB')
     pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
     pil_tensor = TF.to_tensor(pil_image)
@@ -349,12 +354,14 @@ else:
         z = one_hot @ model.quantize.embed.weight
     else:
         z = one_hot @ model.quantize.embedding.weight
+
     z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2) 
     z = torch.rand_like(z)*2
+
 z_orig = z.clone()
 z.requires_grad_(True)
 
-# Set the optimiser										# NR: Play
+# Set the optimiser										# NR: Add optimiser options
 #opt = optim.Adam([z], lr=args.step_size)	# LR=0.1
 opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2
 #opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
