@@ -1,12 +1,9 @@
 # VQGAN-CLIP Overview
 A repo for running VQGAN+CLIP locally. This started out as a Katherine Crowson VQGAN+CLIP derived Google colab notebook.
-
-Original notebook [![Open In Colab][colab-badge]][colab-notebook]
+Original notebook: [![Open In Colab][colab-badge]][colab-notebook]
 
 [colab-notebook]: <https://colab.research.google.com/drive/1ZAus_gn2RhTZWzOWUpPERNC0Q8OhZRTZ>
 [colab-badge]: <https://colab.research.google.com/assets/colab-badge.svg>
-
-See https://github.com/CompVis/taming-transformers for information on datasets and models.
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
 
@@ -29,17 +26,26 @@ pip install ftfy regex tqdm omegaconf pytorch-lightning IPython
 
 pip install kornia imageio imageio-ffmpeg einops 
 ```
+You will also need at least 1 VQGAN pretrained model. E.g.
+```
+mkdir checkpoints
+curl -L -o checkpoints/vqgan_imagenet_f16_16384.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.yaml' #ImageNet 16384
+curl -L -o checkpoints/vqgan_imagenet_f16_16384.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.ckpt' #ImageNet 16384
+```
+By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
+See https://github.com/CompVis/taming-transformers for more information on datasets and models.
 
 # Run
+To generate images from text, specify your text prompt as shown in the example below:
 ```
-python generate.py
+python generate.py -p "A painting of a cat sitting on a doormat"
 ```
 
-## Prompts
+## Multiple prompts
 Text and image prompts can be split using the pipe symbol, "|". For example:
 
 ```
-python generate.py -p "A picture of a snowflake | zoom | high definition"
+python generate.py -p "A sketch of a face | high definition | complex and detailed"
 ```
 
 You can also use image and text prompts together. For example:
@@ -52,7 +58,7 @@ python generate.py -p "A portrait of a face | Picasso" -ip "/Pictures/A_Face.jpg
 Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
 
 ```
-python generate.py -p="A pencil sketch" -ii=/Pictures/A_Face.jpg -i=100 -se=25 -lr=0.215 -o=Face_pencil_sketch.png
+python generate.py -p "A pencil sketch" -ii /Pictures/A_Face.jpg -i 80 -se 20 -opt AdamW -lr 0.25 -o=Face_pencil_sketch.png
 ```
 
 ## Advanced options
@@ -62,10 +68,11 @@ python generate.py -h
 ```
 
 ```
-generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
-[-nps NOISE_PROMPT_SEEDS] [-npw NOISE_PROMPT_WEIGHTS] [-s SIZE SIZE] [-ii INIT_IMAGE]
-[-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT]
-[-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ] [-sd SEED]
+usage: generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
+[-nps [NOISE_PROMPT_SEEDS ...]] [-npw [NOISE_PROMPT_WEIGHTS ...]] [-s SIZE SIZE]
+[-ii INIT_IMAGE] [-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG]
+[-ckpt VQGAN_CHECKPOINT] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ]
+[-sd SEED] [-opt OPTIMISER]
 ```
 
 ```
@@ -79,12 +86,12 @@ optional arguments:
                         Number of iterations
   -ip IMAGE_PROMPTS, --image_prompts IMAGE_PROMPTS
                         Image prompts / target image
-  -nps NOISE_PROMPT_SEEDS, --noise_prompt_seeds NOISE_PROMPT_SEEDS
+  -nps [NOISE_PROMPT_SEEDS ...], --noise_prompt_seeds [NOISE_PROMPT_SEEDS ...]
                         Noise prompt seeds
-  -npw NOISE_PROMPT_WEIGHTS, --noise_prompt_weights NOISE_PROMPT_WEIGHTS
-                        Noise prompt seeds
+  -npw [NOISE_PROMPT_WEIGHTS ...], --noise_prompt_weights [NOISE_PROMPT_WEIGHTS ...]
+                        Noise prompt weights
   -s SIZE SIZE, --size SIZE SIZE
-                        Image size (width, height)
+                        Image size (width height)
   -ii INIT_IMAGE, --init_image INIT_IMAGE
                         Initial image
   -iw INIT_WEIGHT, --init_weight INIT_WEIGHT
@@ -104,5 +111,7 @@ optional arguments:
   -se DISPLAY_FREQ, --save_every DISPLAY_FREQ
                         Save image iterations
   -sd SEED, --seed SEED
-                        Save image iterations
+                        Seed
+  -opt OPTIMISER, --optimiser OPTIMISER
+                        Optimiser (Adam, AdamW, Adagrad, Adamax)
 ```
