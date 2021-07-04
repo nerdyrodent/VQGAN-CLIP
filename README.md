@@ -13,6 +13,7 @@ Some example images:
 
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
+Typical VRAM requirement: 10 GB
 
 Still a work in progress :)
 
