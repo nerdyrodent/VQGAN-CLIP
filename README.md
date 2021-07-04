@@ -14,7 +14,10 @@ Some example images:
 Environment:
 * Tested on Ubuntu 20.04
 * GPU: Nvidia RTX 3090
-* Typical VRAM requirement: 10 GB
+* Typical VRAM requirements:
+  * 24 GB for a 900x900 image
+  * 10 GB for a 512x512 image
+  *  8 GB for a 380x380 image
 
 Still a work in progress :)
 
