@@ -88,6 +88,13 @@ To use `zoom.sh`, specifying a text prompt, output filename and number of frames
 ```
 <img src="./samples/zoom.gif" width="256px"></img>
 
+## Random text example
+Use `random.sh` to make a batch of images from random text. Edit the text and number of generated images to your taste!
+```
+./random.sh
+```
+
+
 ## Advanced options
 To view the available options, use "-h".
 ```
