@@ -70,10 +70,10 @@ Using an input image along with a text prompt and a low number of iterations to 
 python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.jpg -i 80 -se 10 -opt AdamW -lr 0.25
 ```
 
-
-| Input         | Output        |
+| Output        | Style         |
 | ------------- | ------------- |
-| <img src="./samples/VanGogh.jpg" width="256px"></img> | <img src="./samples/vvg_picasso.png" width="256px"></img> |
+| <img src="./samples/vvg_picasso.png" width="256px"></img> | Picasso |
+| <img src="./samples/vvg_sketch.png" width="256px"></img>  | Sketch  |
 
 ## Advanced options
 To view the available options, use "-h".
