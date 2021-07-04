@@ -38,11 +38,12 @@ See https://github.com/CompVis/taming-transformers for more information on datas
 # Run
 To generate images from text, specify your text prompt as shown in the example below:
 ```
-python generate.py -p "A painting of a cat sitting on a doormat"
+python generate.py -p "A painting of an apple in a fruit bowl"
 ```
+<img src="./samples/A_painting_of_an_apple_in_a_fruitbowl.png" width="256px"></img>
 
 ## Multiple prompts
-Text and image prompts can be split using the pipe symbol, "|". For example:
+Text and image prompts can be split using the pipe symbol in order to allow multiple prompts. For example:
 
 ```
 python generate.py -p "A sketch of a face | high definition | complex and detailed"
@@ -135,3 +136,4 @@ optional arguments:
       primaryClass={cs.CV}
 }
 ```
+Public Domain images from Open Access Images at the Art Institute of Chicago - https://www.artic.edu/open-access/open-access-images
