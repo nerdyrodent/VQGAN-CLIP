@@ -39,7 +39,7 @@ vq_parser.add_argument("-o", "--output", type=str, help="Number of iterations", 
 vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
 vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
 vq_parser.add_argument("-nps", "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
-vq_parser.add_argument("-npw", "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt seeds", default=[], dest='noise_prompt_weights')
+vq_parser.add_argument("-npw", "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
 vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
 vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
 vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
@@ -50,7 +50,8 @@ vq_parser.add_argument("-lr", "--learning_rate", type=float, help="Learning rate
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
-vq_parser.add_argument("-sd", "--seed", type=int, help="Save image iterations", default=None, dest='seed')
+vq_parser.add_argument("-sd", "--seed", type=int, help="Seed", default=None, dest='seed')
+vq_parser.add_argument("-opt", "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax) ", default='Adam', dest='optimiser')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -286,26 +287,6 @@ def resize_image(image, out_size):
 
 # Do it
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-# Output for the user
-print('Using device:', device)
-
-if args.prompts:
-    print('Using text prompts:', args.prompts)  
-if args.image_prompts:
-    print('Using image prompts:', args.image_prompts)
-if args.init_image:
-    print('Using initial image:', args.init_image)
-if args.noise_prompt_weights:
-    print('Noise prompt weights:', args.noise_prompt_weights)    
-    
-if args.seed is None:
-    seed = torch.seed()
-else:
-    seed = args.seed  
-torch.manual_seed(seed)
-print('Using seed:', seed)
-
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
 perceptor = clip.load(args.clip_model, jit=False)[0].eval().requires_grad_(False).to(device)	# jit=False for PyTorch > 1.7.1
 
@@ -361,11 +342,34 @@ else:
 z_orig = z.clone()
 z.requires_grad_(True)
 
-# Set the optimiser										# NR: Add optimiser options
-#opt = optim.Adam([z], lr=args.step_size)	# LR=0.1
-opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2
-#opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
-#opt = optim.Adadelta([z], lr=args.step_size)	# LR=?
+# Set the optimiser
+if args.optimiser == "Adam":
+    opt = optim.Adam([z], lr=args.step_size)		# LR=0.1    
+elif args.optimiser == "AdamW":
+    opt = optim.AdamW([z], lr=args.step_size)		# LR=0.2    
+elif args.optimiser == "Adagrad":
+    opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
+elif args.optimiser == "Adamax":
+    opt = optim.Adamax([z], lr=args.step_size)	# LR=0.2
+
+# Output for the user
+print('Using device:', device)
+print('Optimising using:', args.optimiser)
+
+if args.prompts:
+    print('Using text prompts:', args.prompts)  
+if args.image_prompts:
+    print('Using image prompts:', args.image_prompts)
+if args.init_image:
+    print('Using initial image:', args.init_image)
+if args.noise_prompt_weights:
+    print('Noise prompt weights:', args.noise_prompt_weights)    
+if args.seed is None:
+    seed = torch.seed()
+else:
+    seed = args.seed  
+torch.manual_seed(seed)
+print('Using seed:', seed)
 
 pMs = []
 normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
