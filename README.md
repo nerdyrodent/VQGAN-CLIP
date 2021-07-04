@@ -7,9 +7,9 @@ Original notebook: [![Open In Colab][colab-badge]][colab-notebook]
 
 Some example images:
 
-|<img src="./samples/Cartoon3.png" width="256px"></img>|<img src="./samples/Cartoon.png" width="256px"></img>|<img src="./samples/Cartoon2.png" width="256px"></img>
-|<img src="./samples/Bedroom.png" width="256px"></img>|<img src="./samples/DemonBiscuits.png" width="256px"></img>|<img src="./samples/Football.png" width="256px"></img>
-|<img src="./samples/Fractal_Landscape3.png" width="256px"></img>|<img src="./samples/Games_5.png" width="256px"></img>
+<img src="./samples/Cartoon3.png" width="256px"></img><img src="./samples/Cartoon.png" width="256px"></img><img src="./samples/Cartoon2.png" width="256px"></img>
+<img src="./samples/Bedroom.png" width="256px"></img><img src="./samples/DemonBiscuits.png" width="256px"></img><img src="./samples/Football.png" width="256px"></img>
+<img src="./samples/Fractal_Landscape3.png" width="256px"></img><img src="./samples/Games_5.png" width="256px"></img>
 
 
 Tested on Ubuntu 20.04, Nvidia RTX 3090.
@@ -64,11 +64,16 @@ python generate.py -p "A picture of a bedroom with a portrait of Van Gogh" -ip "
 ```
 
 ## "Style Transfer"
-Input image can be used along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
+Using an input image along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
 
 ```
-python generate.py -p "A pencil sketch" -ii /Pictures/A_Face.jpg -i 80 -se 20 -opt AdamW -lr 0.25 -o Face_pencil_sketch.png
+python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.jpg -i 80 -se 10 -opt AdamW -lr 0.25
 ```
+
+
+| Input         | Output        |
+| ------------- | ------------- |
+| <img src="./samples/VanGogh.jpg" width="256px"></img> | <img src="./samples/vvg_picasso.png" width="256px"></img> |
 
 ## Advanced options
 To view the available options, use "-h".
