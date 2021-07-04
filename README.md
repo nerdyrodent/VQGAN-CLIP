@@ -66,7 +66,7 @@ python generate.py -p "A picture of a bedroom with a portrait of Van Gogh" -ip "
 ```
 
 ## "Style Transfer"
-Using an input image along with a text prompt and a low number of iterations to create a sort of "style transfer" effect. For example:
+An input image with style text and a low number of iterations can be used create a sort of "style transfer" effect. For example:
 
 ```
 python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.jpg -i 80 -se 10 -opt AdamW -lr 0.25
