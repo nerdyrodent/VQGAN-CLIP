@@ -6,10 +6,11 @@ mkdir -p "$LOC"
 IMAGENET_1024=false
 IMAGENET_16384=true
 OPENIMAGES=false
-COCO=false
-FACESHQ=false
 WIKIART_1024=false
 WIKIART_16384=false
+# Not yet working:
+COCO=false
+FACESHQ=false
 SFLCKR=false
 
 
@@ -99,6 +100,3 @@ if [ "$SFLCKR" = true ] ; then
     curl -L -o "$LOC"/sflckr.ckpt -C - 'https://heibox.uni-heidelberg.de/d/73487ab6e5314cb5adba/files/?p=%2Fcheckpoints%2Flast.ckpt&dl=1' #S-FLCKR
   fi
 fi
-
-
-
