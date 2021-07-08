@@ -20,8 +20,6 @@ Environment:
   * 10 GB for a 512x512 image
   *  8 GB for a 380x380 image
 
-Still a work in progress - I've not actually tested everything yet :)
-
 # Set up
 Example set up using Anaconda to create a virtual Python environment with the prerequisites:
 
@@ -38,8 +36,15 @@ git clone https://github.com/CompVis/taming-transformers.git
 You will also need at least 1 VQGAN pretrained model. E.g.
 ```
 mkdir checkpoints
+
 curl -L -o checkpoints/vqgan_imagenet_f16_16384.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.yaml' #ImageNet 16384
 curl -L -o checkpoints/vqgan_imagenet_f16_16384.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.ckpt' #ImageNet 16384
+
+curl -L -o checkpoints/vqgan_imagenet_f16_1024.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_1024.yaml' #ImageNet 1024
+curl -L -o checkpoints/vqgan_imagenet_f16_1024.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_1024.ckpt' #ImageNet 1024
+
+curl -L -o checkpoints/vqgan_gumbel_f8_8192.yaml -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fconfigs%2Fmodel.yaml&dl=1' # Gumbel-f8
+curl -L -o checkpoints/vqgan_gumbel_f8_8192.ckpt -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fckpts%2Flast.ckpt&dl=1'    # Gumbel-f8
 ```
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
 See https://github.com/CompVis/taming-transformers for more information on datasets and models.
