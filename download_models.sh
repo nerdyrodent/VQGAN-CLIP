@@ -5,7 +5,7 @@ mkdir -p "$LOC"
 # Which models to download?
 IMAGENET_1024=false
 IMAGENET_16384=true
-GUMBEL=true
+GUMBEL=false
 WIKIART_1024=false
 WIKIART_16384=false
 # Not yet working:
@@ -44,7 +44,7 @@ fi
 if [ "$GUMBEL" = true ] ; then
   # vqgan_gumbel_f8_8192 (was openimages_f16_8192) - 376 MB:
   if [ ! -f "$LOC"/vqgan_gumbel_f8_8192.yaml ]; then
-    curl -L -o "$LOC"/vqgan_gumbel_f8_8192_8192.yaml -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fconfigs%2Fmodel.yaml&dl=1' 
+    curl -L -o "$LOC"/vqgan_gumbel_f8_8192.yaml -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fconfigs%2Fmodel.yaml&dl=1' 
   fi
   if [ ! -f "$LOC"/vqgan_gumbel_f8_8192.ckpt ]; then
     curl -L -o "$LOC"/vqgan_gumbel_f8_8192.ckpt -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fckpts%2Flast.ckpt&dl=1'    
