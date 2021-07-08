@@ -66,47 +66,6 @@ if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
 
-
-'''
-# Download models
-imagenet_16384 = False
-imagenet_1024 = False
-openimages_8192 = False
-wikiart_16384 = False
-wikiart_1024 = False
-coco = False
-faceshq = False
-sflckr = False
-
-
-if imagenet_1024:
-  curl -L -o vqgan_imagenet_f16_1024.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_1024.yaml' #ImageNet 1024
-  curl -L -o vqgan_imagenet_f16_1024.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_1024.ckpt'  #ImageNet 1024
-if imagenet_16384:
-  curl -L -o vqgan_imagenet_f16_16384.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.yaml' #ImageNet 16384
-  curl -L -o vqgan_imagenet_f16_16384.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.ckpt' #ImageNet 16384
-if openimages_8192:
-  curl -L -o vqgan_openimages_f16_8192.yaml -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fconfigs%2Fmodel.yaml&dl=1' #ImageNet 16384
-  curl -L -o vqgan_openimages_f16_8192.ckpt -C - 'https://heibox.uni-heidelberg.de/d/2e5662443a6b4307b470/files/?p=%2Fckpts%2Flast.ckpt&dl=1' #ImageNet 16384
-
-if coco:
-  curl -L -o coco.yaml -C - 'https://dl.nmkd.de/ai/clip/coco/coco.yaml' #COCO
-  curl -L -o coco.ckpt -C - 'https://dl.nmkd.de/ai/clip/coco/coco.ckpt' #COCO
-if faceshq:
-  curl -L -o faceshq.yaml -C - 'https://drive.google.com/uc?export=download&id=1fHwGx_hnBtC8nsq7hesJvs-Klv-P0gzT' #FacesHQ
-  curl -L -o faceshq.ckpt -C - 'https://app.koofr.net/content/links/a04deec9-0c59-4673-8b37-3d696fe63a5d/files/get/last.ckpt?path=%2F2020-11-13T21-41-45_faceshq_transformer%2Fcheckpoints%2Flast.ckpt' #FacesHQ
-if wikiart_1024: 
-  curl -L -o wikiart_1024.yaml -C - 'http://mirror.io.community/blob/vqgan/wikiart.yaml' #WikiArt 1024
-  curl -L -o wikiart_1024.ckpt -C - 'http://mirror.io.community/blob/vqgan/wikiart.ckpt' #WikiArt 1024
-if wikiart_16384: 
-  curl -L -o wikiart_16384.yaml -C - 'http://mirror.io.community/blob/vqgan/wikiart_16384.yaml' #WikiArt 16384
-  curl -L -o wikiart_16384.ckpt -C - 'http://mirror.io.community/blob/vqgan/wikiart_16384.ckpt' #WikiArt 16384
-if sflckr:
-  curl -L -o sflckr.yaml -C - 'https://heibox.uni-heidelberg.de/d/73487ab6e5314cb5adba/files/?p=%2Fconfigs%2F2020-11-09T13-31-51-project.yaml&dl=1' #S-FLCKR
-  curl -L -o sflckr.ckpt -C - 'https://heibox.uni-heidelberg.de/d/73487ab6e5314cb5adba/files/?p=%2Fcheckpoints%2Flast.ckpt&dl=1' #S-FLCKR
-'''
-
-
 # Functions and classes
 def sinc(x):
     return torch.where(x != 0, torch.sin(math.pi * x) / (math.pi * x), x.new_ones([]))
@@ -258,6 +217,8 @@ class MakeCutouts(nn.Module):
 
 
 def load_vqgan_model(config_path, checkpoint_path):
+    global gumbel
+    gumbel = False
     config = OmegaConf.load(config_path)
     if config.model.target == 'taming.models.vqgan.VQModel':
         model = vqgan.VQModel(**config.model.params)
@@ -267,6 +228,7 @@ def load_vqgan_model(config_path, checkpoint_path):
         model = vqgan.GumbelVQ(**config.model.params)
         model.eval().requires_grad_(False)
         model.init_from_ckpt(checkpoint_path)
+        gumbel = True
     elif config.model.target == 'taming.models.cond_transformer.Net2NetTransformer':
         parent_model = cond_transformer.Net2NetTransformer(**config.model.params)
         parent_model.eval().requires_grad_(False)
@@ -289,7 +251,8 @@ def resize_image(image, out_size):
 # Do it
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
-perceptor = clip.load(args.clip_model, jit=False)[0].eval().requires_grad_(False).to(device)	# jit=False for PyTorch > 1.7.1
+jit = True if float(torch.__version__[:3]) < 1.8 else False
+perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
 
 # clock=deepcopy(perceptor.visual.positional_embedding.data)
 # perceptor.visual.positional_embedding.data = clock/clock.max()
@@ -303,7 +266,7 @@ make_cutouts = MakeCutouts(cut_size, args.cutn, cut_pow=args.cut_pow)
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
 
-if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':			# NR: Should handle this better
+if gumbel:
     e_dim = 256
     n_toks = model.quantize.n_embed
     z_min = model.quantize.embed.weight.min(dim=0).values[None, :, None, None]
@@ -313,6 +276,7 @@ else:
     n_toks = model.quantize.n_e
     z_min = model.quantize.embedding.weight.min(dim=0).values[None, :, None, None]
     z_max = model.quantize.embedding.weight.max(dim=0).values[None, :, None, None]
+    
 # z_min = model.quantize.embedding.weight.min(dim=0).values[None, :, None, None]
 # z_max = model.quantize.embedding.weight.max(dim=0).values[None, :, None, None]
 
@@ -332,7 +296,7 @@ if args.init_image:
 else:
     one_hot = F.one_hot(torch.randint(n_toks, [toksY * toksX], device=device), n_toks).float()
     # z = one_hot @ model.quantize.embedding.weight
-    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':		# NR: Should handle this better
+    if gumbel:
         z = one_hot @ model.quantize.embed.weight
     else:
         z = one_hot @ model.quantize.embedding.weight
@@ -342,6 +306,10 @@ else:
 
 z_orig = z.clone()
 z.requires_grad_(True)
+
+pMs = []
+normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
+                                  std=[0.26862954, 0.26130258, 0.27577711])
 
 # Set the optimiser
 if args.optimiser == "Adam":
@@ -372,9 +340,6 @@ else:
 torch.manual_seed(seed)
 print('Using seed:', seed)
 
-pMs = []
-normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
-                                  std=[0.26862954, 0.26130258, 0.27577711])
 
 for prompt in args.prompts:
     txt, weight, stop = parse_prompt(prompt)
@@ -397,7 +362,7 @@ for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):			#
 
 
 def synth(z):
-    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':		# NR: Should handle this better
+    if gumbel:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)
     else:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embedding.weight).movedim(3, 1)
