@@ -303,7 +303,7 @@ make_cutouts = MakeCutouts(cut_size, args.cutn, cut_pow=args.cut_pow)
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
 
-if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':			# NR: Should handle this better
+if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':			# NR: Should handle this better
     e_dim = 256
     n_toks = model.quantize.n_embed
     z_min = model.quantize.embed.weight.min(dim=0).values[None, :, None, None]
@@ -332,7 +332,7 @@ if args.init_image:
 else:
     one_hot = F.one_hot(torch.randint(n_toks, [toksY * toksX], device=device), n_toks).float()
     # z = one_hot @ model.quantize.embedding.weight
-    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':		# NR: Should handle this better
+    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':		# NR: Should handle this better
         z = one_hot @ model.quantize.embed.weight
     else:
         z = one_hot @ model.quantize.embedding.weight
@@ -397,7 +397,7 @@ for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):			#
 
 
 def synth(z):
-    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt':		# NR: Should handle this better
+    if args.vqgan_checkpoint == 'checkpoints/vqgan_openimages_f16_8192.ckpt' or args.vqgan_checkpoint == 'checkpoints/vqgan_gumbel_f8_8192.ckpt':		# NR: Should handle this better
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)
     else:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embedding.weight).movedim(3, 1)
