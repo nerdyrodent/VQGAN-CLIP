@@ -42,6 +42,8 @@ curl -L -o checkpoints/vqgan_imagenet_f16_16384.ckpt -C - 'http://mirror.io.comm
 ```
 The `download_models.sh` script is an optional way to download a number of models. By default, it will download just 1 model.
 
+See https://github.com/CompVis/taming-transformers#overview-of-pretrained-models for more information about pre-trained models.
+
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
 See https://github.com/CompVis/taming-transformers for more information on datasets and models.
 
