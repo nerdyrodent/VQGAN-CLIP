@@ -47,6 +47,8 @@ See https://github.com/CompVis/taming-transformers#overview-of-pretrained-models
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
 See https://github.com/CompVis/taming-transformers for more information on datasets and models.
 
+Information also on [YouTube](https://www.youtube.com/watch?v=1Esb-ZjO7tw).
+
 # Run
 To generate images from text, specify your text prompt as shown in the example below:
 ```
