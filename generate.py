@@ -7,6 +7,10 @@ from pathlib import Path
 from urllib.request import urlopen
 from tqdm import tqdm
 import sys
+import os
+
+# pip install taming-transformers work with Gumbel, but does works with coco etc
+# appending the path works with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
 sys.path.append('taming-transformers')
 
 from base64 import b64encode
@@ -43,6 +47,7 @@ vq_parser.add_argument("-nps", "--noise_prompt_seeds", nargs="*", type=int, help
 vq_parser.add_argument("-npw", "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
 vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
 vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
+vq_parser.add_argument("-in", "--init_noise", type=bool, help="Initial using a noise image", default=False, dest='init_noise')
 vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
 vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
@@ -52,10 +57,15 @@ vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", d
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
 vq_parser.add_argument("-sd", "--seed", type=int, help="Seed", default=None, dest='seed')
-vq_parser.add_argument("-opt", "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax) ", default='Adam', dest='optimiser')
+vq_parser.add_argument("-opt", "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax)", default='Adam', dest='optimiser')
+#vq_parser.add_argument("-aug", "--augments", type=str, help="Augments (to be defined)", default='Unknown', dest='augments')
+vq_parser.add_argument("-vid", "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
+
+if args.init_image and args.init_noise:
+   print("Initial image and initial noise selected. Ignoring initial noise...")
 
 # Split text prompts using the pipe character
 if args.prompts:
@@ -65,6 +75,12 @@ if args.prompts:
 if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
+    
+# Make video directory
+if args.make_video:
+    if not os.path.exists('steps'):
+        os.mkdir('steps')
+
 
 # Functions and classes
 def sinc(x):
@@ -85,6 +101,12 @@ def ramp(ratio, width):
         out[i] = cur
         cur += ratio
     return torch.cat([-out[1:].flip([0]), out])[1:-1]
+
+
+# NR: Testing noise image generation
+def random_noise_image(w,h):
+    random_image = Image.fromarray(np.random.randint(0,255,(w,h,3),dtype=np.dtype('uint8')))
+    return random_image
 
 
 # Not used?
@@ -175,19 +197,22 @@ class MakeCutouts(nn.Module):
         self.cut_pow = cut_pow
 
         self.augs = nn.Sequential(
-            # K.RandomHorizontalFlip(p=0.5),
+            # K.RandomHorizontalFlip(p=0.5),				# NR: add augmentation options
             # K.RandomVerticalFlip(p=0.5),
             # K.RandomSolarize(0.01, 0.01, p=0.7),
             # K.RandomSharpness(0.3,p=0.4),
             # K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5),
             # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5),
+            
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
             K.RandomPerspective(0.7,p=0.7),
             K.ColorJitter(hue=0.1, saturation=0.1, p=0.7),
             K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),
+            )
             
-)
         self.noise_fac = 0.1
+        
+        # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
 
@@ -198,18 +223,18 @@ class MakeCutouts(nn.Module):
         cutouts = []
         
         for _ in range(self.cutn):
-
             # size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
             # offsetx = torch.randint(0, sideX - size + 1, ())
             # offsety = torch.randint(0, sideY - size + 1, ())
             # cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
             # cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
-
             # cutout = transforms.Resize(size=(self.cut_size, self.cut_size))(input)
             
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
+            
         batch = self.augs(torch.cat(cutouts, dim=0))
+        
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
@@ -293,6 +318,13 @@ if args.init_image:
     pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
     pil_tensor = TF.to_tensor(pil_image)
     z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+elif args.init_noise:							# NR: Noise test
+    img = random_noise_image(args.size[0], args.size[1])
+    
+    pil_image = img.convert('RGB')
+    pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
+    pil_tensor = TF.to_tensor(pil_image)
+    z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
 else:
     one_hot = F.one_hot(torch.randint(n_toks, [toksY * toksX], device=device), n_toks).float()
     # z = one_hot @ model.quantize.embedding.weight
@@ -302,7 +334,7 @@ else:
         z = one_hot @ model.quantize.embedding.weight
 
     z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2) 
-    z = torch.rand_like(z)*2
+    #z = torch.rand_like(z)*2						# NR: check
 
 z_orig = z.clone()
 z.requires_grad_(True)
@@ -389,10 +421,11 @@ def ascend_txt():
         result.append(F.mse_loss(z, torch.zeros_like(z_orig)) * ((1/torch.tensor(i*2 + 1))*args.init_weight) / 2)
     for prompt in pMs:
         result.append(prompt(iii))
-        
-    img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
-    img = np.transpose(img, (1, 2, 0))
-    #imageio.imwrite('./steps/' + str(i) + '.jpg', np.array(img))				# NR: Save image in steps dir - removed for now (can use for video)
+    
+    if args.make_video:    
+        img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+        img = np.transpose(img, (1, 2, 0))
+        imageio.imwrite('./steps/' + str(i) + '.png', np.array(img))
 
     return result
 
@@ -424,3 +457,32 @@ try:
 except KeyboardInterrupt:
     pass
 
+
+# Video generation
+if args.make_video:
+    init_frame = 1 #This is the frame where the video will start
+    last_frame = i #You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
+
+    min_fps = 10
+    max_fps = 60
+
+    total_frames = last_frame-init_frame
+
+    length = 15 #Desired time of the video in seconds
+
+    frames = []
+    tqdm.write('Generating video...')
+    for i in range(init_frame,last_frame): #
+        frames.append(Image.open("./steps/"+ str(i) +'.png'))
+
+    #fps = last_frame/10
+    fps = np.clip(total_frames/length,min_fps,max_fps)
+
+    from subprocess import Popen, PIPE
+    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-vcodec', 'png', '-r', str(fps), '-i', '-', '-vcodec', 'libx264', '-r', str(fps), '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'veryslow', 'steps.mp4'], stdin=PIPE)
+    for im in tqdm(frames):
+        im.save(p.stdin, 'PNG')
+    p.stdin.close()
+    p.wait()
+    
+    
