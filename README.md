@@ -33,6 +33,8 @@ pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio i
 git clone https://github.com/openai/CLIP
 git clone https://github.com/CompVis/taming-transformers.git
 ```
+In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
+
 You will also need at least 1 VQGAN pretrained model. E.g.
 ```
 mkdir checkpoints
