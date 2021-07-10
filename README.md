@@ -107,11 +107,11 @@ python generate.py -h
 ```
 
 ```
-usage: generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS]
-[-nps [NOISE_PROMPT_SEEDS ...]] [-npw [NOISE_PROMPT_WEIGHTS ...]] [-s SIZE SIZE]
-[-ii INIT_IMAGE] [-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG]
-[-ckpt VQGAN_CHECKPOINT] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ]
-[-sd SEED] [-opt OPTIMISER]
+usage: generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS] 
+ [-nps [NOISE_PROMPT_SEEDS ...]] [-npw [NOISE_PROMPT_WEIGHTS ...]] [-s SIZE SIZE] 
+ [-ii INIT_IMAGE] [-in INIT_NOISE] [-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG]
+ [-ckpt VQGAN_CHECKPOINT] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ]
+ [-sd SEED] [-opt OPTIMISER] [-vid MAKE_VIDEO]
 ```
 
 ```
@@ -133,6 +133,8 @@ optional arguments:
                         Image size (width height)
   -ii INIT_IMAGE, --init_image INIT_IMAGE
                         Initial image
+  -in INIT_NOISE, --init_noise INIT_NOISE
+                        Init using a noise image
   -iw INIT_WEIGHT, --init_weight INIT_WEIGHT
                         Initial image weight
   -m CLIP_MODEL, --clip_model CLIP_MODEL
@@ -153,6 +155,8 @@ optional arguments:
                         Seed
   -opt OPTIMISER, --optimiser OPTIMISER
                         Optimiser (Adam, AdamW, Adagrad, Adamax)
+  -vid MAKE_VIDEO, --video MAKE_VIDEO
+                        Create video frames?
 ```
 
 # Citations
