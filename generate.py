@@ -23,8 +23,8 @@ from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
-torch.backends.cudnn.benchmark = False	# NR: True is a bit faster, but can lead to OOM. False is also more deterministic.
-torch.use_deterministic_algorithms(False)
+torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
+#torch.use_deterministic_algorithms(True)	# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
 from CLIP import clip
 import kornia.augmentation as K
@@ -39,33 +39,37 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
 # Add the arguments
-vq_parser.add_argument("-p", "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
-vq_parser.add_argument("-o", "--output", type=str, help="Number of iterations", default="output.png", dest='output')
-vq_parser.add_argument("-i", "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
-vq_parser.add_argument("-ip", "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
-vq_parser.add_argument("-nps", "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
-vq_parser.add_argument("-npw", "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
-vq_parser.add_argument("-s", "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
-vq_parser.add_argument("-ii", "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-in", "--init_noise", type=bool, help="Initial using a noise image", default=False, dest='init_noise')
-vq_parser.add_argument("-iw", "--init_weight", type=float, help="Initial image weight", default=0., dest='init_weight')
-vq_parser.add_argument("-m", "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
+vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
+vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
+vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
+vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
+vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
+vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
+vq_parser.add_argument("-in",   "--init_noise", type=bool, help="Init using a noise image?", default=False, dest='init_noise')
+vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
+vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
 vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=f'checkpoints/vqgan_imagenet_f16_16384.ckpt', dest='vqgan_checkpoint')
-vq_parser.add_argument("-lr", "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
+vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
+vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
+vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
-vq_parser.add_argument("-se", "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
-vq_parser.add_argument("-sd", "--seed", type=int, help="Seed", default=None, dest='seed')
-vq_parser.add_argument("-opt", "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax)", default='Adam', dest='optimiser')
+vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
+vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax)", default='Adam', dest='optimiser')
+vq_parser.add_argument("-o",    "--output", type=str, help="Number of iterations", default="output.png", dest='output')
+vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
+vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
 #vq_parser.add_argument("-aug", "--augments", type=str, help="Augments (to be defined)", default='Unknown', dest='augments')
-vq_parser.add_argument("-vid", "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
 
 if args.init_image and args.init_noise:
-   print("Initial image and initial noise selected. Ignoring initial noise...")
+   print("Warning: Initial image AND initial noise selected")
+
+if args.cudnn_determinism:
+   torch.backends.cudnn.deterministic = True
 
 # Split text prompts using the pipe character
 if args.prompts:
@@ -76,7 +80,7 @@ if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
     
-# Make video directory
+# Make video steps directory
 if args.make_video:
     if not os.path.exists('steps'):
         os.mkdir('steps')
@@ -230,6 +234,7 @@ class MakeCutouts(nn.Module):
             # cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
             # cutout = transforms.Resize(size=(self.cut_size, self.cut_size))(input)
             
+            # Pooling
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
             
@@ -343,6 +348,28 @@ pMs = []
 normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                   std=[0.26862954, 0.26130258, 0.27577711])
 
+# CLIP tokenize/encode
+# NR: Weights / blending
+for prompt in args.prompts:
+    txt, weight, stop = parse_prompt(prompt)
+    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+    pMs.append(Prompt(embed, weight, stop).to(device))
+
+for prompt in args.image_prompts:
+    path, weight, stop = parse_prompt(prompt)
+    img = Image.open(path)
+    pil_image = img.convert('RGB')
+    img = resize_image(pil_image, (sideX, sideY))
+    batch = make_cutouts(TF.to_tensor(img).unsqueeze(0).to(device))
+    embed = perceptor.encode_image(normalize(batch)).float()
+    pMs.append(Prompt(embed, weight, stop).to(device))
+
+for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
+    gen = torch.Generator().manual_seed(seed)
+    embed = torch.empty([1, perceptor.visual.output_dim]).normal_(generator=gen)
+    pMs.append(Prompt(embed, weight).to(device))
+
+
 # Set the optimiser
 if args.optimiser == "Adam":
     opt = optim.Adam([z], lr=args.step_size)		# LR=0.1    
@@ -365,6 +392,7 @@ if args.init_image:
     print('Using initial image:', args.init_image)
 if args.noise_prompt_weights:
     print('Noise prompt weights:', args.noise_prompt_weights)    
+
 if args.seed is None:
     seed = torch.seed()
 else:
@@ -373,29 +401,9 @@ torch.manual_seed(seed)
 print('Using seed:', seed)
 
 
-for prompt in args.prompts:
-    txt, weight, stop = parse_prompt(prompt)
-    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
-    pMs.append(Prompt(embed, weight, stop).to(device))
-
-for prompt in args.image_prompts:
-    path, weight, stop = parse_prompt(prompt)
-    img = Image.open(path)
-    pil_image = img.convert('RGB')
-    img = resize_image(pil_image, (sideX, sideY))
-    batch = make_cutouts(TF.to_tensor(img).unsqueeze(0).to(device))
-    embed = perceptor.encode_image(normalize(batch)).float()
-    pMs.append(Prompt(embed, weight, stop).to(device))
-
-for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):			# NR: weights
-    gen = torch.Generator().manual_seed(seed)
-    embed = torch.empty([1, perceptor.visual.output_dim]).normal_(generator=gen)
-    pMs.append(Prompt(embed, weight).to(device))
-
-
 def synth(z):
     if gumbel:
-        z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)
+        z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)		# Vector quantize
     else:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embedding.weight).movedim(3, 1)
     return clamp_with_grad(model.decode(z_q).add(1).div(2), 0, 1)
@@ -419,6 +427,7 @@ def ascend_txt():
     if args.init_weight:
         # result.append(F.mse_loss(z, z_orig) * args.init_weight / 2)
         result.append(F.mse_loss(z, torch.zeros_like(z_orig)) * ((1/torch.tensor(i*2 + 1))*args.init_weight) / 2)
+
     for prompt in pMs:
         result.append(prompt(iii))
     
@@ -460,15 +469,15 @@ except KeyboardInterrupt:
 
 # Video generation
 if args.make_video:
-    init_frame = 1 #This is the frame where the video will start
-    last_frame = i #You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
+    init_frame = 1 # This is the frame where the video will start
+    last_frame = i # You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
 
     min_fps = 10
     max_fps = 60
 
     total_frames = last_frame-init_frame
 
-    length = 15 #Desired time of the video in seconds
+    length = 15 # Desired time of the video in seconds
 
     frames = []
     tqdm.write('Generating video...')
@@ -484,5 +493,4 @@ if args.make_video:
         im.save(p.stdin, 'PNG')
     p.stdin.close()
     p.wait()
-    
     
