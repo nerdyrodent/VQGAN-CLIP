@@ -31,5 +31,5 @@ do
   convert "$FILENAME" -distort SRT 1 -gravity center "$FILENAME"	# Rotate
 done
 
-# Make video
-ffmpeg -y -i "$FILENAME_NO_EXT"-%04d."$FILE_EXTENSION" -b:v 8M -c:v h264_nvenc -r 30 -pix_fmt yuv420p -strict -2 -filter "minterpolate='fps=60'" video.mp4
+# Make video - Nvidia GPU expected
+ffmpeg -y -i "$FILENAME_NO_EXT"-%04d."$FILE_EXTENSION" -b:v 8M -c:v h264_nvenc -pix_fmt yuv420p -strict -2 -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=60'" video.mp4
