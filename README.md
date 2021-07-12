@@ -109,11 +109,11 @@ python generate.py -h
 ```
 
 ```
-usage: generate.py [-h] [-p PROMPTS] [-o OUTPUT] [-i MAX_ITERATIONS] [-ip IMAGE_PROMPTS] 
- [-nps [NOISE_PROMPT_SEEDS ...]] [-npw [NOISE_PROMPT_WEIGHTS ...]] [-s SIZE SIZE] 
- [-ii INIT_IMAGE] [-in INIT_NOISE] [-iw INIT_WEIGHT] [-m CLIP_MODEL] [-conf VQGAN_CONFIG]
- [-ckpt VQGAN_CHECKPOINT] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW] [-se DISPLAY_FREQ]
- [-sd SEED] [-opt OPTIMISER] [-vid MAKE_VIDEO]
+usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-se DISPLAY_FREQ]
+ [-s SIZE SIZE] [-ii INIT_IMAGE] [-in INIT_NOISE] [-iw INIT_WEIGHT] [-m CLIP_MODEL]
+ [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT] [-nps [NOISE_PROMPT_SEEDS ...]]
+ [-npw [NOISE_PROMPT_WEIGHTS ...]] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW]
+ [-sd SEED] [-opt OPTIMISER] [-o OUTPUT] [-vid MAKE_VIDEO] [-d CUDNN_DETERMINISM]
 ```
 
 ```
@@ -121,44 +121,46 @@ optional arguments:
   -h, --help            show this help message and exit
   -p PROMPTS, --prompts PROMPTS
                         Text prompts
-  -o OUTPUT, --output OUTPUT
-                        Number of iterations
-  -i MAX_ITERATIONS, --iterations MAX_ITERATIONS
-                        Number of iterations
   -ip IMAGE_PROMPTS, --image_prompts IMAGE_PROMPTS
                         Image prompts / target image
-  -nps [NOISE_PROMPT_SEEDS ...], --noise_prompt_seeds [NOISE_PROMPT_SEEDS ...]
-                        Noise prompt seeds
-  -npw [NOISE_PROMPT_WEIGHTS ...], --noise_prompt_weights [NOISE_PROMPT_WEIGHTS ...]
-                        Noise prompt weights
+  -i MAX_ITERATIONS, --iterations MAX_ITERATIONS
+                        Number of iterations
+  -se DISPLAY_FREQ, --save_every DISPLAY_FREQ
+                        Save image iterations
   -s SIZE SIZE, --size SIZE SIZE
                         Image size (width height)
   -ii INIT_IMAGE, --init_image INIT_IMAGE
                         Initial image
   -in INIT_NOISE, --init_noise INIT_NOISE
-                        Init using a noise image
+                        Init using a noise image?
   -iw INIT_WEIGHT, --init_weight INIT_WEIGHT
-                        Initial image weight
+                        Initial weight
   -m CLIP_MODEL, --clip_model CLIP_MODEL
                         CLIP model
   -conf VQGAN_CONFIG, --vqgan_config VQGAN_CONFIG
                         VQGAN config
   -ckpt VQGAN_CHECKPOINT, --vqgan_checkpoint VQGAN_CHECKPOINT
                         VQGAN checkpoint
+  -nps [NOISE_PROMPT_SEEDS ...], --noise_prompt_seeds [NOISE_PROMPT_SEEDS ...]
+                        Noise prompt seeds
+  -npw [NOISE_PROMPT_WEIGHTS ...], --noise_prompt_weights [NOISE_PROMPT_WEIGHTS ...]
+                        Noise prompt weights
   -lr STEP_SIZE, --learning_rate STEP_SIZE
                         Learning rate
   -cuts CUTN, --num_cuts CUTN
                         Number of cuts
   -cutp CUT_POW, --cut_power CUT_POW
                         Cut power
-  -se DISPLAY_FREQ, --save_every DISPLAY_FREQ
-                        Save image iterations
   -sd SEED, --seed SEED
                         Seed
   -opt OPTIMISER, --optimiser OPTIMISER
                         Optimiser (Adam, AdamW, Adagrad, Adamax)
+  -o OUTPUT, --output OUTPUT
+                        Number of iterations
   -vid MAKE_VIDEO, --video MAKE_VIDEO
                         Create video frames?
+  -d CUDNN_DETERMINISM, --deterministic CUDNN_DETERMINISM
+                        Enable cudnn.deterministic?
 ```
 
 # Citations
