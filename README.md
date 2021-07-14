@@ -28,7 +28,7 @@ conda create --name vqgan python=3.9
 conda activate vqgan
 
 pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
-pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops 
+pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops torch_optimizer
 
 git clone https://github.com/openai/CLIP
 git clone https://github.com/CompVis/taming-transformers.git
@@ -132,7 +132,7 @@ optional arguments:
   -ii INIT_IMAGE, --init_image INIT_IMAGE
                         Initial image
   -in INIT_NOISE, --init_noise INIT_NOISE
-                        Init using a noise image?
+                        Initial noise image (pixels or gradient)
   -iw INIT_WEIGHT, --init_weight INIT_WEIGHT
                         Initial weight
   -m CLIP_MODEL, --clip_model CLIP_MODEL
@@ -154,9 +154,9 @@ optional arguments:
   -sd SEED, --seed SEED
                         Seed
   -opt OPTIMISER, --optimiser OPTIMISER
-                        Optimiser (Adam, AdamW, Adagrad, Adamax)
+                        Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)
   -o OUTPUT, --output OUTPUT
-                        Path to output file
+                        Output file
   -vid MAKE_VIDEO, --video MAKE_VIDEO
                         Create video frames?
   -d CUDNN_DETERMINISM, --deterministic CUDNN_DETERMINISM
