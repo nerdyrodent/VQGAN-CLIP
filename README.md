@@ -156,7 +156,7 @@ optional arguments:
   -opt OPTIMISER, --optimiser OPTIMISER
                         Optimiser (Adam, AdamW, Adagrad, Adamax)
   -o OUTPUT, --output OUTPUT
-                        Number of iterations
+                        Path to output file
   -vid MAKE_VIDEO, --video MAKE_VIDEO
                         Create video frames?
   -d CUDNN_DETERMINISM, --deterministic CUDNN_DETERMINISM
