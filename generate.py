@@ -47,7 +47,7 @@ vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterat
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
 vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default='pixels', dest='init_noise')
+vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default=None, dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
 vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
@@ -66,9 +66,6 @@ vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
-
-if args.init_image and args.init_noise:
-   print("Warning: Initial image AND initial noise selected")
 
 if args.cudnn_determinism:
    torch.backends.cudnn.deterministic = True
