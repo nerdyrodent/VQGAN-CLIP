@@ -24,7 +24,9 @@ from torch.nn import functional as F
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
-#torch.use_deterministic_algorithms(True)	# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
+#torch.use_deterministic_algorithms(True)		# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
+
+from torch_optimizer import DiffGrad, AdamP, RAdam
 
 from CLIP import clip
 import kornia.augmentation as K
@@ -45,7 +47,7 @@ vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterat
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
 vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-in",   "--init_noise", type=bool, help="Init using a noise image?", default=False, dest='init_noise')
+vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default='pixels', dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
 vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
@@ -56,8 +58,8 @@ vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning ra
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
-vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax)", default='Adam', dest='optimiser')
-vq_parser.add_argument("-o",    "--output", type=str, help="Number of iterations", default="output.png", dest='output')
+vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
+vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
 vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
 #vq_parser.add_argument("-aug", "--augments", type=str, help="Augments (to be defined)", default='Unknown', dest='augments')
@@ -107,10 +109,33 @@ def ramp(ratio, width):
     return torch.cat([-out[1:].flip([0]), out])[1:-1]
 
 
-# NR: Testing noise image generation
+# NR: Testing with different intital images
 def random_noise_image(w,h):
     random_image = Image.fromarray(np.random.randint(0,255,(w,h,3),dtype=np.dtype('uint8')))
     return random_image
+
+# testing
+def gradient_2d(start, stop, width, height, is_horizontal):
+    if is_horizontal:
+        return np.tile(np.linspace(start, stop, width), (height, 1))
+    else:
+        return np.tile(np.linspace(start, stop, height), (width, 1)).T
+
+
+def gradient_3d(width, height, start_list, stop_list, is_horizontal_list):
+    result = np.zeros((height, width, len(start_list)), dtype=float)
+
+    for i, (start, stop, is_horizontal) in enumerate(zip(start_list, stop_list, is_horizontal_list)):
+        result[:, :, i] = gradient_2d(start, stop, width, height, is_horizontal)
+
+    return result
+
+    
+def random_gradient_image(w,h):
+    array = gradient_3d(w, h, (0, 0, np.random.randint(0,255)), (np.random.randint(1,255), np.random.randint(2,255), np.random.randint(3,128)), (True, False, False))
+    random_image = Image.fromarray(np.uint8(array))
+    return random_image
+
 
 
 # Not used?
@@ -313,19 +338,24 @@ else:
 # normalize_imagenet = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 #                                            std=[0.229, 0.224, 0.225])
 
+# Image initialisation
 if args.init_image:
     if 'http' in args.init_image:
       img = Image.open(urlopen(args.init_image))
     else:
       img = Image.open(args.init_image)
-
     pil_image = img.convert('RGB')
     pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
     pil_tensor = TF.to_tensor(pil_image)
     z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
-elif args.init_noise:							# NR: Noise test
-    img = random_noise_image(args.size[0], args.size[1])
-    
+elif args.init_noise == 'pixels':
+    img = random_noise_image(args.size[0], args.size[1])    
+    pil_image = img.convert('RGB')
+    pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
+    pil_tensor = TF.to_tensor(pil_image)
+    z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+elif args.init_noise == 'gradient':
+    img = random_gradient_image(args.size[0], args.size[1])
     pil_image = img.convert('RGB')
     pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
     pil_tensor = TF.to_tensor(pil_image)
@@ -378,7 +408,14 @@ elif args.optimiser == "AdamW":
 elif args.optimiser == "Adagrad":
     opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
 elif args.optimiser == "Adamax":
-    opt = optim.Adamax([z], lr=args.step_size)	# LR=0.2
+    opt = optim.Adamax([z], lr=args.step_size)	# LR=0.5+?
+elif args.optimiser == "DiffGrad":
+    opt = DiffGrad([z], lr=args.step_size)		# LR=2+?
+elif args.optimiser == "AdamP":
+    opt = AdamP([z], lr=args.step_size)		# LR=2+?
+elif args.optimiser == "RAdam":
+    opt = RAdam([z], lr=args.step_size)		# LR=2+?
+
 
 # Output for the user
 print('Using device:', device)
@@ -392,6 +429,7 @@ if args.init_image:
     print('Using initial image:', args.init_image)
 if args.noise_prompt_weights:
     print('Noise prompt weights:', args.noise_prompt_weights)    
+
 
 if args.seed is None:
     seed = torch.seed()
