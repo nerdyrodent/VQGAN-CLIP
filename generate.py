@@ -523,7 +523,21 @@ if args.make_video:
     fps = np.clip(total_frames/length,min_fps,max_fps)
 
     from subprocess import Popen, PIPE
-    p = Popen(['ffmpeg', '-y', '-f', 'image2pipe', '-vcodec', 'png', '-r', str(fps), '-i', '-', '-vcodec', 'libx264', '-r', str(fps), '-pix_fmt', 'yuv420p', '-crf', '17', '-preset', 'veryslow', 'steps.mp4'], stdin=PIPE)
+    import re
+    output_file = re.compile('\.png$').sub('.mp4', args.output)
+    p = Popen(['ffmpeg',
+               '-y',
+               '-f', 'image2pipe',
+               '-vcodec', 'png',
+               '-r', str(fps),
+               '-i',
+               '-',
+               '-vcodec', 'libx264',
+               '-r', str(fps),
+               '-pix_fmt', 'yuv420p',
+               '-crf', '17',
+               '-preset', 'veryslow',
+               output_file], stdin=PIPE)
     for im in tqdm(frames):
         im.save(p.stdin, 'PNG')
     p.stdin.close()
