@@ -4,6 +4,9 @@ taming-transformers/
 taming/
 checkpoints/
 
+# Editor
+.vscode/
+
 # Operations
 outputs/
 steps/
