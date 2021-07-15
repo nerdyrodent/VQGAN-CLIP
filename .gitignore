@@ -1,7 +1,13 @@
-checkpoints/
-steps/
+# Libraries and Models
+CLIP/
 taming-transformers/
 taming/
-CLIP/
+checkpoints/
+
+# Operations
 outputs/
+steps/
+
+# Files
 output.png
+steps.mp4
