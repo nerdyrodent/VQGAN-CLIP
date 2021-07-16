@@ -33,7 +33,7 @@ import kornia.augmentation as K
 import numpy as np
 import imageio
 
-from PIL import ImageFile, Image
+from PIL import ImageFile, Image, PngImagePlugin
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
@@ -449,7 +449,9 @@ def checkin(i, losses):
     losses_str = ', '.join(f'{loss.item():g}' for loss in losses)
     tqdm.write(f'i: {i}, loss: {sum(losses).item():g}, losses: {losses_str}')
     out = synth(z)
-    TF.to_pil_image(out[0].cpu()).save(args.output) 						
+    info = PngImagePlugin.PngInfo()
+    info.add_text('comment', f'{args.prompts}')
+    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 						
 
 
 def ascend_txt():
@@ -537,6 +539,7 @@ if args.make_video:
                '-pix_fmt', 'yuv420p',
                '-crf', '17',
                '-preset', 'veryslow',
+               '-metadata', f'comment={args.prompts}',
                output_file], stdin=PIPE)
     for im in tqdm(frames):
         im.save(p.stdin, 'PNG')
