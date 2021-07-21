@@ -1,4 +1,5 @@
 # VQGAN-CLIP Overview
+
 A repo for running VQGAN+CLIP locally. This started out as a Katherine Crowson VQGAN+CLIP derived Google colab notebook.
 
 Original notebook: [![Open In Colab][colab-badge]][colab-notebook]
@@ -13,17 +14,19 @@ Some example images:
 <img src="./samples/Fractal_Landscape3.png" width="256px"></img><img src="./samples/Games_5.png" width="256px"></img>
 
 Environment:
+
 * Tested on Ubuntu 20.04
 * GPU: Nvidia RTX 3090
 * Typical VRAM requirements:
   * 24 GB for a 900x900 image
   * 10 GB for a 512x512 image
-  *  8 GB for a 380x380 image
+  * 8 GB for a 380x380 image
 
-# Set up
+## Set up
+
 Example set up using Anaconda to create a virtual Python environment with the prerequisites:
 
-```
+```sh
 conda create --name vqgan python=3.9
 conda activate vqgan
 
@@ -33,82 +36,97 @@ pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio i
 git clone https://github.com/openai/CLIP
 git clone https://github.com/CompVis/taming-transformers.git
 ```
+
 In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
 
 You will also need at least 1 VQGAN pretrained model. E.g.
-```
+
+```sh
 mkdir checkpoints
 
 curl -L -o checkpoints/vqgan_imagenet_f16_16384.yaml -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.yaml' #ImageNet 16384
 curl -L -o checkpoints/vqgan_imagenet_f16_16384.ckpt -C - 'http://mirror.io.community/blob/vqgan/vqgan_imagenet_f16_16384.ckpt' #ImageNet 16384
 ```
+
 The `download_models.sh` script is an optional way to download a number of models. By default, it will download just 1 model.
 
-See https://github.com/CompVis/taming-transformers#overview-of-pretrained-models for more information about pre-trained models.
+See <https://github.com/CompVis/taming-transformers#overview-of-pretrained-models> for more information about pre-trained models.
 
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
-See https://github.com/CompVis/taming-transformers for more information on datasets and models.
+See <https://github.com/CompVis/taming-transformers> for more information on datasets and models.
 
 Information also on [YouTube](https://www.youtube.com/watch?v=1Esb-ZjO7tw).
 
-# Run
+## Run
+
 To generate images from text, specify your text prompt as shown in the example below:
-```
+
+```sh
 python generate.py -p "A painting of an apple in a fruit bowl"
 ```
+
 <img src="./samples/A_painting_of_an_apple_in_a_fruitbowl.png" width="256px"></img>
 
 ## Multiple prompts
+
 Text and image prompts can be split using the pipe symbol in order to allow multiple prompts. For example:
 
-```
+```sh
 python generate.py -p "A painting of an apple in a fruit bowl | psychedelic | surreal | weird"
 ```
+
 <img src="./samples/Apple_weird.png" width="256px"></img>
 
 Image prompts can be split in the same way. For example:
 
-```
+```sh
 python generate.py -p "A picture of a bedroom with a portrait of Van Gogh" -ip "samples/VanGogh.jpg | samples/Bedroom.png"
 ```
 
 ## "Style Transfer"
+
 An input image with style text and a low number of iterations can be used create a sort of "style transfer" effect. For example:
 
-```
+```sh
 python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.jpg -i 80 -se 10 -opt AdamW -lr 0.25
 ```
 
-| Output        | Style         |
-| ------------- | ------------- |
-| <img src="./samples/vvg_picasso.png" width="256px"></img> | Picasso |
-| <img src="./samples/vvg_sketch.png" width="256px"></img>  | Sketch  |
-| <img src="./samples/vvg_psychedelic.png" width="256px"></img>  | Psychedelic  |
+| Output                                                        | Style       |
+| ------------------------------------------------------------- | ----------- |
+| <img src="./samples/vvg_picasso.png" width="256px"></img>     | Picasso     |
+| <img src="./samples/vvg_sketch.png" width="256px"></img>      | Sketch      |
+| <img src="./samples/vvg_psychedelic.png" width="256px"></img> | Psychedelic |
 
 ## Feedback example
+
 By feeding back the generated images and making slight changes, some interesting effects can be created.
 
 The example `zoom.sh` shows this by applying a zoom and rotate to generated images, before feeding them back in again.
 To use `zoom.sh`, specifying a text prompt, output filename and number of frames. E.g.
-```
+
+```sh
 ./zoom.sh "A painting of a red telephone box spinning through a time vortex" Telephone.png 150
 ```
+
 <img src="./samples/zoom.gif" width="256px"></img>
 
 ## Random text example
+
 Use `random.sh` to make a batch of images from random text. Edit the text and number of generated images to your taste!
-```
+
+```sh
 ./random.sh
 ```
 
-
 ## Advanced options
+
 To view the available options, use "-h".
-```
+
+```sh
 python generate.py -h
 ```
 
-```
+```sh
 usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-se DISPLAY_FREQ]
  [-s SIZE SIZE] [-ii INIT_IMAGE] [-in INIT_NOISE] [-iw INIT_WEIGHT] [-m CLIP_MODEL]
  [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT] [-nps [NOISE_PROMPT_SEEDS ...]]
@@ -116,7 +134,7 @@ usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-s
  [-sd SEED] [-opt OPTIMISER] [-o OUTPUT] [-vid MAKE_VIDEO] [-d CUDNN_DETERMINISM]
 ```
 
-```
+```sh
 optional arguments:
   -h, --help            show this help message and exit
   -p PROMPTS, --prompts PROMPTS
@@ -163,7 +181,13 @@ optional arguments:
                         Enable cudnn.deterministic?
 ```
 
-# Citations
+## Help
+
+### `RuntimeError: cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling cusolverDnCreate(handle)`
+
+Make sure you have specified the correct size for the image. For more information please refer to [#6](/issues/6)
+
+## Citations
 
 ```bibtex
 @misc{unpublished2021clip,
@@ -172,6 +196,7 @@ optional arguments:
     year   = {2021}
 }
 ```
+
 ```bibtex
 @misc{esser2020taming,
       title={Taming Transformers for High-Resolution Image Synthesis}, 
@@ -182,6 +207,7 @@ optional arguments:
       primaryClass={cs.CV}
 }
 ```
-Katherine Crowson - https://github.com/crowsonkb
 
-Public Domain images from Open Access Images at the Art Institute of Chicago - https://www.artic.edu/open-access/open-access-images
+Katherine Crowson - <https://github.com/crowsonkb>
+
+Public Domain images from Open Access Images at the Art Institute of Chicago - <https://www.artic.edu/open-access/open-access-images>
