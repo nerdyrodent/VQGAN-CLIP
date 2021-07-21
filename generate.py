@@ -2,8 +2,8 @@
 # The original BigGAN+CLIP method was by https://twitter.com/advadnoun
 
 import argparse
+from email.policy import default
 import math
-from pathlib import Path
 from urllib.request import urlopen
 from tqdm import tqdm
 import sys
@@ -13,14 +13,13 @@ import os
 # appending the path works with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
 sys.path.append('taming-transformers')
 
-from base64 import b64encode
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
-import taming.modules 
 
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
+from torch.cuda import get_device_properties
 from torchvision import transforms
 from torchvision.transforms import functional as TF
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
@@ -36,6 +35,9 @@ import imageio
 from PIL import ImageFile, Image, PngImagePlugin
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+default_image_size = 512
+if get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
+    default_image_size = 318
 
 # Create the parser
 vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
@@ -45,7 +47,7 @@ vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", defa
 vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
 vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
-vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height)", default=[512,512], dest='size')
+vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height) (default: %(default)s)", default=[default_image_size,default_image_size], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
 vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default=None, dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
@@ -60,8 +62,8 @@ vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", def
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
-vq_parser.add_argument("-vid",  "--video", type=bool, help="Create video frames?", default=False, dest='make_video')
-vq_parser.add_argument("-d",    "--deterministic", type=bool, help="Enable cudnn.deterministic?", default=False, dest='cudnn_determinism')
+vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
+vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 #vq_parser.add_argument("-aug", "--augments", type=str, help="Augments (to be defined)", default='Unknown', dest='augments')
 
 # Execute the parse_args() method
