@@ -3,7 +3,7 @@
 
 import argparse
 import math
-from email.policy import default
+# from email.policy import default
 from urllib.request import urlopen
 from tqdm import tqdm
 import sys
@@ -240,7 +240,7 @@ class MakeCutouts(nn.Module):
             # K.RandomSolarize(0.01, 0.01, p=0.7),			# NR: Makes images too dull
             # K.RandomSharpness(0.3,p=0.4),
             # K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5),
-            # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5), # Orig
+            # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5), 
             
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
             K.RandomPerspective(0.7,p=0.7),
