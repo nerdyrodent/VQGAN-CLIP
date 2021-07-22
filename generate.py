@@ -74,13 +74,16 @@ vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choic
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
-vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=['Af','Pe','Ji','Er'], dest='augments')
+vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
 
 if args.cudnn_determinism:
    torch.backends.cudnn.deterministic = True
+
+if not args.augments:
+   args.augments = [['Af', 'Pe', 'Ji', 'Er']]
 
 # Split text prompts using the pipe character
 if args.prompts:
@@ -238,7 +241,7 @@ class MakeCutouts(nn.Module):
         
         # Pick your own augments & their order
         augment_list = []
-        for item in args.augments:
+        for item in args.augments[0]:
             if item == 'Ji':
                 augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05, p=0.5))
             elif item == 'Sh':
@@ -261,6 +264,8 @@ class MakeCutouts(nn.Module):
                 augment_list.append(K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
+        
+        print(augment_list)
         
         self.augs = nn.Sequential(*augment_list)
 
