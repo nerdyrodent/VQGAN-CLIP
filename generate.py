@@ -2,28 +2,29 @@
 # The original BigGAN+CLIP method was by https://twitter.com/advadnoun
 
 import argparse
-from email.policy import default
 import math
+from email.policy import default
 from urllib.request import urlopen
 from tqdm import tqdm
 import sys
 import os
 
-# pip install taming-transformers work with Gumbel, but does works with coco etc
+# pip install taming-transformers works with Gumbel, but does not work with coco etc
 # appending the path works with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
 sys.path.append('taming-transformers')
 
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
+#import taming.modules 
 
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
-from torch.cuda import get_device_properties
 from torchvision import transforms
 from torchvision.transforms import functional as TF
+from torch.cuda import get_device_properties
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
-#torch.use_deterministic_algorithms(True)		# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
+#torch.use_deterministic_algorithms(True)	# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
 from torch_optimizer import DiffGrad, AdamP, RAdam
 
@@ -35,6 +36,14 @@ import imageio
 from PIL import ImageFile, Image, PngImagePlugin
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+from subprocess import Popen, PIPE
+import re
+
+# Supress warnings
+import warnings
+warnings.filterwarnings('ignore')
+
+# Reduce the default image size if low VRAM
 default_image_size = 512
 if get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
     default_image_size = 318
@@ -43,13 +52,13 @@ if get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 
 vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
 
 # Add the arguments
-vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default="A nerdy rodent", dest='prompts')
+vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", default=None, dest='prompts')
 vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
 vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
 vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height) (default: %(default)s)", default=[default_image_size,default_image_size], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default=None, dest='init_noise')
+vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default='pixels', dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
 vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
@@ -60,11 +69,11 @@ vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning ra
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
-vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)", default='Adam', dest='optimiser')
+vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam'], default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
-#vq_parser.add_argument("-aug", "--augments", type=str, help="Augments (to be defined)", default='Unknown', dest='augments')
+# vq_parser.add_argument("-aug", "--augments", nargs='?', type=int, choices=[0,1,2,3,4,5,6,7,8,9,10,11], help="Enabled augments", default=0, dest='augments')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -80,6 +89,7 @@ if args.prompts:
 if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
+
     
 # Make video steps directory
 if args.make_video:
@@ -211,7 +221,7 @@ class Prompt(nn.Module):
         return self.weight.abs() * replace_grad(dists, torch.maximum(dists, self.stop)).mean()
 
 
-def parse_prompt(prompt):
+def parse_prompt(prompt):						# NR: Weights after colons
     vals = prompt.rsplit(':', 2)
     vals = vals + ['', '1', '-inf'][len(vals):]
     return vals[0], float(vals[1]), float(vals[2])
@@ -224,13 +234,13 @@ class MakeCutouts(nn.Module):
         self.cutn = cutn
         self.cut_pow = cut_pow
 
-        self.augs = nn.Sequential(
-            # K.RandomHorizontalFlip(p=0.5),				# NR: add augmentation options
-            # K.RandomVerticalFlip(p=0.5),
-            # K.RandomSolarize(0.01, 0.01, p=0.7),
+        self.augs = nn.Sequential(					# NR: add augmentation options
+            # K.RandomHorizontalFlip(p=0.5),				# NR: fragments the image?
+            # K.RandomVerticalFlip(p=0.5),				# NR: fragments the image?
+            # K.RandomSolarize(0.01, 0.01, p=0.7),			# NR: Makes images too dull
             # K.RandomSharpness(0.3,p=0.4),
             # K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5),
-            # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5),
+            # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5), # Orig
             
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
             K.RandomPerspective(0.7,p=0.7),
@@ -245,9 +255,9 @@ class MakeCutouts(nn.Module):
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
 
     def forward(self, input):
-        sideY, sideX = input.shape[2:4]
-        max_size = min(sideX, sideY)
-        min_size = min(sideX, sideY, self.cut_size)
+        # sideY, sideX = input.shape[2:4]
+        # max_size = min(sideX, sideY)
+        # min_size = min(sideX, sideY, self.cut_size)
         cutouts = []
         
         for _ in range(self.cutn):
@@ -258,7 +268,7 @@ class MakeCutouts(nn.Module):
             # cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
             # cutout = transforms.Resize(size=(self.cut_size, self.cut_size))(input)
             
-            # Pooling
+            # Use Pooling
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
             
@@ -378,7 +388,7 @@ normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                   std=[0.26862954, 0.26130258, 0.27577711])
 
 # CLIP tokenize/encode
-# NR: Weights / blending
+# NR: Add alternate method
 for prompt in args.prompts:
     txt, weight, stop = parse_prompt(prompt)
     embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
@@ -401,20 +411,22 @@ for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
 
 # Set the optimiser
 if args.optimiser == "Adam":
-    opt = optim.Adam([z], lr=args.step_size)		# LR=0.1    
+    opt = optim.Adam([z], lr=args.step_size)	# LR=0.1 (Default)
 elif args.optimiser == "AdamW":
-    opt = optim.AdamW([z], lr=args.step_size)		# LR=0.2    
+    opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2    
 elif args.optimiser == "Adagrad":
     opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
 elif args.optimiser == "Adamax":
     opt = optim.Adamax([z], lr=args.step_size)	# LR=0.5+?
 elif args.optimiser == "DiffGrad":
-    opt = DiffGrad([z], lr=args.step_size)		# LR=2+?
+    opt = DiffGrad([z], lr=args.step_size)	# LR=2+?
 elif args.optimiser == "AdamP":
     opt = AdamP([z], lr=args.step_size)		# LR=2+?
 elif args.optimiser == "RAdam":
     opt = RAdam([z], lr=args.step_size)		# LR=2+?
-
+else:
+    print("Unknown optimiser")
+    
 
 # Output for the user
 print('Using device:', device)
@@ -453,7 +465,7 @@ def checkin(i, losses):
     out = synth(z)
     info = PngImagePlugin.PngInfo()
     info.add_text('comment', f'{args.prompts}')
-    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 						
+    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 	
 
 
 def ascend_txt():
@@ -525,9 +537,6 @@ if args.make_video:
 
     #fps = last_frame/10
     fps = np.clip(total_frames/length,min_fps,max_fps)
-
-    from subprocess import Popen, PIPE
-    import re
     output_file = re.compile('\.png$').sub('.mp4', args.output)
     p = Popen(['ffmpeg',
                '-y',
@@ -547,4 +556,3 @@ if args.make_video:
         im.save(p.stdin, 'PNG')
     p.stdin.close()
     p.wait()
-    
