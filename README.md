@@ -132,7 +132,7 @@ usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-s
  [-s SIZE SIZE] [-ii INIT_IMAGE] [-in INIT_NOISE] [-iw INIT_WEIGHT] [-m CLIP_MODEL]
  [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT] [-nps [NOISE_PROMPT_SEEDS ...]]
  [-npw [NOISE_PROMPT_WEIGHTS ...]] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW]
- [-sd SEED] [-opt OPTIMISER] [-o OUTPUT] [-vid MAKE_VIDEO] [-d CUDNN_DETERMINISM]
+ [-sd SEED] [-opt OPTIMISER] [-o OUTPUT] [-vid MAKE_VIDEO] [-d CUDNN_DETERMINISM] [-aug AUGMENT]
 ```
 
 ```sh
@@ -147,7 +147,7 @@ optional arguments:
   -se DISPLAY_FREQ, --save_every DISPLAY_FREQ
                         Save image iterations
   -s SIZE SIZE, --size SIZE SIZE
-                        Image size (width height)
+                        Image size (width height) (default: [512, 512])
   -ii INIT_IMAGE, --init_image INIT_IMAGE
                         Initial image
   -in INIT_NOISE, --init_noise INIT_NOISE
@@ -172,14 +172,15 @@ optional arguments:
                         Cut power
   -sd SEED, --seed SEED
                         Seed
-  -opt OPTIMISER, --optimiser OPTIMISER
-                        Optimiser (Adam, AdamW, Adagrad, Adamax, DiffGrad, AdamP or RAdam)
+  -opt, --optimiser {Adam,AdamW,Adagrad,Adamax,DiffGrad,AdamP,RAdam}
+                        Optimiser
   -o OUTPUT, --output OUTPUT
                         Output file
-  -vid MAKE_VIDEO, --video MAKE_VIDEO
-                        Create video frames?
-  -d CUDNN_DETERMINISM, --deterministic CUDNN_DETERMINISM
-                        Enable cudnn.deterministic?
+  -vid, --video         Create video frames?
+  -d, --deterministic   Enable cudnn.deterministic?
+  -aug, --augments  [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
+                        Enabled augments
+
 ```
 
 ## Help
