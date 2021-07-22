@@ -43,6 +43,7 @@ import re
 import warnings
 warnings.filterwarnings('ignore')
 
+
 # Reduce the default image size if low VRAM
 default_image_size = 512
 if get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
@@ -73,7 +74,7 @@ vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choic
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
-# vq_parser.add_argument("-aug", "--augments", nargs='?', type=int, choices=[0,1,2,3,4,5,6,7,8,9,10,11], help="Enabled augments", default=0, dest='augments')
+vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=['Af','Pe','Ji','Er'], dest='augments')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -123,7 +124,8 @@ def random_noise_image(w,h):
     random_image = Image.fromarray(np.random.randint(0,255,(w,h,3),dtype=np.dtype('uint8')))
     return random_image
 
-# testing
+
+# create initial gradient image
 def gradient_2d(start, stop, width, height, is_horizontal):
     if is_horizontal:
         return np.tile(np.linspace(start, stop, width), (height, 1))
@@ -233,22 +235,55 @@ class MakeCutouts(nn.Module):
         self.cut_size = cut_size
         self.cutn = cutn
         self.cut_pow = cut_pow
+        
+        # Pick your own augments & their order
+        augment_list = []
+        for item in args.augments:
+            if item == 'Ji':
+                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05, p=0.5))
+            elif item == 'Sh':
+                augment_list.append(K.RandomSharpness(sharpness=0.4, p=0.7))
+            elif item == 'Gn':
+                augment_list.append(K.RandomGaussianNoise(mean=0.0, std=1., p=0.5))
+            elif item == 'Pe':
+                augment_list.append(K.RandomPerspective(distortion_scale=0.7, p=0.7))
+            elif item == 'Ro':
+                augment_list.append(K.RandomRotation(degrees=15, p=0.7))
+            elif item == 'Af':
+                augment_list.append(K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'))
+            elif item == 'Et':
+                augment_list.append(K.RandomElasticTransform(p=0.7))
+            elif item == 'Ts':
+                augment_list.append(K.RandomThinPlateSpline(scale=0.3, same_on_batch=False, p=0.7))
+            elif item == 'Cr':
+                augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5))
+            elif item == 'Er':
+                augment_list.append(K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7))
+            elif item == 'Re':
+                augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
+        
+        self.augs = nn.Sequential(*augment_list)
 
-        self.augs = nn.Sequential(					# NR: add augmentation options
-            # K.RandomHorizontalFlip(p=0.5),				# NR: fragments the image?
-            # K.RandomVerticalFlip(p=0.5),				# NR: fragments the image?
-            # K.RandomSolarize(0.01, 0.01, p=0.7),			# NR: Makes images too dull
+        '''
+        self.augs = nn.Sequential(
+            # Original:
+            # K.RandomHorizontalFlip(p=0.5),
+            # K.RandomVerticalFlip(p=0.5),
+            # K.RandomSolarize(0.01, 0.01, p=0.7),
             # K.RandomSharpness(0.3,p=0.4),
             # K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5),
             # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5), 
-            
+
+            # Updated colab:
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
             K.RandomPerspective(0.7,p=0.7),
             K.ColorJitter(hue=0.1, saturation=0.1, p=0.7),
-            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),
+            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),        
             )
+        '''
             
         self.noise_fac = 0.1
+        # self.noise_fac = False
         
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
@@ -425,7 +460,7 @@ elif args.optimiser == "AdamP":
 elif args.optimiser == "RAdam":
     opt = RAdam([z], lr=args.step_size)		# LR=2+?
 else:
-    print("Unknown optimiser")
+    print("Unknown optimiser. Are choices broken?")
     
 
 # Output for the user
