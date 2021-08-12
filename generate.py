@@ -9,7 +9,7 @@ from tqdm import tqdm
 import sys
 import os
 
-# pip install taming-transformers works with Gumbel, but does not work with coco etc
+# pip install taming-transformers works with Gumbel, but does not yet work with coco etc
 # appending the path works with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
 sys.path.append('taming-transformers')
 
@@ -59,9 +59,9 @@ vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterat
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
 vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height) (default: %(default)s)", default=[default_image_size,default_image_size], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
-vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default='pixels', dest='init_noise')
+vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default=None, dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
-vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model", default='ViT-B/32', dest='clip_model')
+vq_parser.add_argument("-m",    "--clip_model", type=str, help="CLIP model (e.g. ViT-B/32, ViT-B/16)", default='ViT-B/32', dest='clip_model')
 vq_parser.add_argument("-conf", "--vqgan_config", type=str, help="VQGAN config", default=f'checkpoints/vqgan_imagenet_f16_16384.yaml', dest='vqgan_config')
 vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN checkpoint", default=f'checkpoints/vqgan_imagenet_f16_16384.ckpt', dest='vqgan_checkpoint')
 vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
@@ -73,8 +73,13 @@ vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, d
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam'], default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
+vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create video frames?", dest='make_zoom_video')
+vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
+vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
+vq_parser.add_argument("-vl",   "--video_length", type=int, help="Video length in seconds", default=10, dest='video_length')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
+vq_parser.add_argument("-mer",  "--merge", action='store_true', help="Merge tokens", dest='do_merge')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -85,23 +90,26 @@ if args.cudnn_determinism:
 if not args.augments:
    args.augments = [['Af', 'Pe', 'Ji', 'Er']]
 
-# Split text prompts using the pipe character
+# Split text prompts using the pipe character (weights are split later)
 if args.prompts:
     args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
     
-# Split target images using the pipe character
+# Split target images using the pipe character (weights are split later)
 if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
 
+if args.make_video and args.make_zoom_video:
+    print("Warning: Make video and make zoom video are mutually exclusive.")
+    args.make_video = False
     
 # Make video steps directory
-if args.make_video:
+if args.make_video or args.make_zoom_video:
     if not os.path.exists('steps'):
         os.mkdir('steps')
 
 
-# Functions and classes
+# Various functions and classes
 def sinc(x):
     return torch.where(x != 0, torch.sin(math.pi * x) / (math.pi * x), x.new_ones([]))
 
@@ -149,7 +157,6 @@ def random_gradient_image(w,h):
     array = gradient_3d(w, h, (0, 0, np.random.randint(0,255)), (np.random.randint(1,255), np.random.randint(2,255), np.random.randint(3,128)), (True, False, False))
     random_image = Image.fromarray(np.uint8(array))
     return random_image
-
 
 
 # Not used?
@@ -226,7 +233,8 @@ class Prompt(nn.Module):
         return self.weight.abs() * replace_grad(dists, torch.maximum(dists, self.stop)).mean()
 
 
-def parse_prompt(prompt):						# NR: Weights after colons
+#NR: Split prompts and weights
+def split_prompt(prompt):
     vals = prompt.rsplit(':', 2)
     vals = vals + ['', '1', '-inf'][len(vals):]
     return vals[0], float(vals[1]), float(vals[2])
@@ -243,7 +251,7 @@ class MakeCutouts(nn.Module):
         augment_list = []
         for item in args.augments[0]:
             if item == 'Ji':
-                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.05, hue=0.05, p=0.5))
+                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=0.5))
             elif item == 'Sh':
                 augment_list.append(K.RandomSharpness(sharpness=0.4, p=0.7))
             elif item == 'Gn':
@@ -253,7 +261,7 @@ class MakeCutouts(nn.Module):
             elif item == 'Ro':
                 augment_list.append(K.RandomRotation(degrees=15, p=0.7))
             elif item == 'Af':
-                augment_list.append(K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'))
+                augment_list.append(K.RandomAffine(degrees=15, translate=0.1, shear=15, p=0.7, padding_mode='border', keepdim=True)) # border, reflection, zeros
             elif item == 'Et':
                 augment_list.append(K.RandomElasticTransform(p=0.7))
             elif item == 'Ts':
@@ -261,11 +269,11 @@ class MakeCutouts(nn.Module):
             elif item == 'Cr':
                 augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5))
             elif item == 'Er':
-                augment_list.append(K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7))
+                augment_list.append(K.RandomErasing(scale=(.05, .33), ratio=(.3, 1.3), same_on_batch=True, p=0.5))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
         
-        print(augment_list)
+        # print(augment_list)
         
         self.augs = nn.Sequential(*augment_list)
 
@@ -351,7 +359,6 @@ def resize_image(image, out_size):
     return image.resize(size, Image.LANCZOS)
 
 
-
 # Do it
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
@@ -380,12 +387,7 @@ else:
     n_toks = model.quantize.n_e
     z_min = model.quantize.embedding.weight.min(dim=0).values[None, :, None, None]
     z_max = model.quantize.embedding.weight.max(dim=0).values[None, :, None, None]
-    
-# z_min = model.quantize.embedding.weight.min(dim=0).values[None, :, None, None]
-# z_max = model.quantize.embedding.weight.max(dim=0).values[None, :, None, None]
 
-# normalize_imagenet = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-#                                            std=[0.229, 0.224, 0.225])
 
 # Image initialisation
 if args.init_image:
@@ -427,15 +429,18 @@ pMs = []
 normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
                                   std=[0.26862954, 0.26130258, 0.27577711])
 
-# CLIP tokenize/encode
-# NR: Add alternate method
+# From imagenet - Which is better?
+#normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+#                                  std=[0.229, 0.224, 0.225])
+
+# CLIP tokenize/encode   
 for prompt in args.prompts:
-    txt, weight, stop = parse_prompt(prompt)
+    txt, weight, stop = split_prompt(prompt)
     embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
     pMs.append(Prompt(embed, weight, stop).to(device))
 
 for prompt in args.image_prompts:
-    path, weight, stop = parse_prompt(prompt)
+    path, weight, stop = split_prompt(prompt)
     img = Image.open(path)
     pil_image = img.convert('RGB')
     img = resize_image(pil_image, (sideX, sideY))
@@ -490,9 +495,10 @@ torch.manual_seed(seed)
 print('Using seed:', seed)
 
 
+# Vector quantize
 def synth(z):
     if gumbel:
-        z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)		# Vector quantize
+        z_q = vector_quantize(z.movedim(1, 3), model.quantize.embed.weight).movedim(3, 1)
     else:
         z_q = vector_quantize(z.movedim(1, 3), model.quantize.embedding.weight).movedim(3, 1)
     return clamp_with_grad(model.decode(z_q).add(1).div(2), 0, 1)
@@ -545,13 +551,69 @@ def train(i):
         z.copy_(z.maximum(z_min).minimum(z_max))
 
 
+
+def zoom_at(img, x, y, zoom):
+    w, h = img.size
+    zoom2 = zoom * 2
+    img = img.crop((x - w / zoom2, y - h / zoom2, 
+                    x + w / zoom2, y + h / zoom2))
+    return img.resize((w, h), Image.LANCZOS)
+
+
 i = 0
+j = 0
 try:
     with tqdm() as pbar:
         while True:
             train(i)
+            
+            if args.make_zoom_video:
+                if i % args.zoom_frequency == 0:
+                    out = synth(z)
+                    
+                    # Save image
+                    img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+                    img = np.transpose(img, (1, 2, 0))
+                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))                    
+
+                    # Convert z back into a Pil image                    
+                    pil_image = TF.to_pil_image(out[0].cpu())
+                    
+                    # Zoom
+                    pil_image_zoom = zoom_at(pil_image, args.size[0]/2, args.size[1]/2, args.zoom_scale)
+                    
+                    # Convert image back to a tensor again
+                    pil_tensor = TF.to_tensor(pil_image_zoom)
+                    
+                    # Re-encode
+                    z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+                    z_orig = z.clone()
+                    z.requires_grad_(True)
+
+                    # Reset optimiser
+                    if args.optimiser == "Adam":
+                        opt = optim.Adam([z], lr=args.step_size)
+                    elif args.optimiser == "AdamW":
+                        opt = optim.AdamW([z], lr=args.step_size)
+                    elif args.optimiser == "Adagrad":
+                        opt = optim.Adagrad([z], lr=args.step_size)
+                    elif args.optimiser == "Adamax":
+                        opt = optim.Adamax([z], lr=args.step_size)
+                    elif args.optimiser == "DiffGrad":
+                         opt = DiffGrad([z], lr=args.step_size)
+                    elif args.optimiser == "AdamP":
+                         opt = AdamP([z], lr=args.step_size)
+                    elif args.optimiser == "RAdam":
+                         opt = RAdam([z], lr=args.step_size)
+                    else:
+                        print("Unknown optimiser. Are choices broken?")
+                    
+                    # Next
+                    j += 1
+
             if i == args.max_iterations:
                 break
+
             i += 1
             pbar.update()
 except KeyboardInterrupt:
@@ -559,16 +621,19 @@ except KeyboardInterrupt:
 
 
 # Video generation
-if args.make_video:
+if args.make_video or args.make_zoom_video:
     init_frame = 1 # This is the frame where the video will start
-    last_frame = i # You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
+    if args.make_zoom_video:
+        last_frame = j
+    else:
+        last_frame = i # You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
 
     min_fps = 10
     max_fps = 60
 
     total_frames = last_frame-init_frame
 
-    length = 15 # Desired time of the video in seconds
+    length = args.video_length # Desired time of the video in seconds
 
     frames = []
     tqdm.write('Generating video...')
@@ -596,3 +661,4 @@ if args.make_video:
         im.save(p.stdin, 'PNG')
     p.stdin.close()
     p.wait()
+
