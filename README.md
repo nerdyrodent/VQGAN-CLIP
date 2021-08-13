@@ -111,6 +111,11 @@ To use `zoom.sh`, specifying a text prompt, output filename and number of frames
 
 <img src="./samples/zoom.gif" width="256px"></img>
 
+There is also a simple zoom video creation option available. For example:
+```sh
+python generate.py -p "The inside of a sphere" -zvid -i 4500 -zse 20 -vl 10 -zsc 0.97 -opt Adagrad -lr 0.15 -se 4500
+```
+
 ## Random text example
 
 Use `random.sh` to make a batch of images from random text. Edit the text and number of generated images to your taste!
@@ -155,7 +160,7 @@ optional arguments:
   -iw INIT_WEIGHT, --init_weight INIT_WEIGHT
                         Initial weight
   -m CLIP_MODEL, --clip_model CLIP_MODEL
-                        CLIP model
+                        CLIP model (e.g. ViT-B/32, ViT-B/16)
   -conf VQGAN_CONFIG, --vqgan_config VQGAN_CONFIG
                         VQGAN config
   -ckpt VQGAN_CHECKPOINT, --vqgan_checkpoint VQGAN_CHECKPOINT
@@ -177,9 +182,15 @@ optional arguments:
   -o OUTPUT, --output OUTPUT
                         Output file
   -vid, --video         Create video frames?
+  -zvid, --zoom_video   Create zoom video?
+  -zse ZOOM_FREQUENCY, --zoom_save_every ZOOM_FREQUENCY
+                        Save zoom image iterations
+  -zsc ZOOM_SCALE, --zoom_scale ZOOM_SCALE
+                        Zoom scale
+  -vl VIDEO_LENGTH, --video_length VIDEO_LENGTH
+                        Video length in seconds
   -d, --deterministic   Enable cudnn.deterministic?
   -aug, --augments  [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
-                        Enabled augments
 
 ```
 
