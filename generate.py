@@ -73,13 +73,13 @@ vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, d
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam'], default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
-vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create video frames?", dest='make_zoom_video')
+vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
 vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
 vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
-vq_parser.add_argument("-vl",   "--video_length", type=int, help="Video length in seconds", default=10, dest='video_length')
+vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=1500, dest='prompt_frequency')
+vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds", default=10, dest='video_length')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
-vq_parser.add_argument("-mer",  "--merge", action='store_true', help="Merge tokens", dest='do_merge')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -92,7 +92,16 @@ if not args.augments:
 
 # Split text prompts using the pipe character (weights are split later)
 if args.prompts:
-    args.prompts = [phrase.strip() for phrase in args.prompts.split("|")]
+    # For stories, there will be many phrases
+    story_phrases = [phrase.strip() for phrase in args.prompts.split("^")]
+    
+    # Make a list of all phrases
+    all_phrases = []
+    for phrase in story_phrases:
+        all_phrases.append(phrase.split("|"))
+    
+    # First phrase
+    args.prompts = all_phrases[0]
     
 # Split target images using the pipe character (weights are split later)
 if args.image_prompts:
@@ -128,6 +137,15 @@ def ramp(ratio, width):
         out[i] = cur
         cur += ratio
     return torch.cat([-out[1:].flip([0]), out])[1:-1]
+
+
+# For zoom video
+def zoom_at(img, x, y, zoom):
+    w, h = img.size
+    zoom2 = zoom * 2
+    img = img.crop((x - w / zoom2, y - h / zoom2, 
+                    x + w / zoom2, y + h / zoom2))
+    return img.resize((w, h), Image.LANCZOS)
 
 
 # NR: Testing with different intital images
@@ -455,23 +473,28 @@ for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
 
 
 # Set the optimiser
-if args.optimiser == "Adam":
-    opt = optim.Adam([z], lr=args.step_size)	# LR=0.1 (Default)
-elif args.optimiser == "AdamW":
-    opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2    
-elif args.optimiser == "Adagrad":
-    opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
-elif args.optimiser == "Adamax":
-    opt = optim.Adamax([z], lr=args.step_size)	# LR=0.5+?
-elif args.optimiser == "DiffGrad":
-    opt = DiffGrad([z], lr=args.step_size)	# LR=2+?
-elif args.optimiser == "AdamP":
-    opt = AdamP([z], lr=args.step_size)		# LR=2+?
-elif args.optimiser == "RAdam":
-    opt = RAdam([z], lr=args.step_size)		# LR=2+?
-else:
-    print("Unknown optimiser. Are choices broken?")
-    
+def get_opt(opt_name):
+    if opt_name == "Adam":
+        opt = optim.Adam([z], lr=args.step_size)	# LR=0.1 (Default)
+    elif opt_name == "AdamW":
+        opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2    
+    elif opt_name == "Adagrad":
+        opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
+    elif opt_name == "Adamax":
+        opt = optim.Adamax([z], lr=args.step_size)	# LR=0.5+?
+    elif opt_name == "DiffGrad":
+        opt = DiffGrad([z], lr=args.step_size)	    # LR=2+?
+    elif opt_name == "AdamP":
+        opt = AdamP([z], lr=args.step_size)		    # LR=2+?
+    elif opt_name == "RAdam":
+        opt = RAdam([z], lr=args.step_size)		    # LR=2+?
+    else:
+        print("Unknown optimiser. Are choices broken?")
+        opt = optim.Adam([z], lr=args.step_size)
+    return opt
+
+opt = get_opt(args.optimiser)
+
 
 # Output for the user
 print('Using device:', device)
@@ -552,21 +575,15 @@ def train(i):
 
 
 
-def zoom_at(img, x, y, zoom):
-    w, h = img.size
-    zoom2 = zoom * 2
-    img = img.crop((x - w / zoom2, y - h / zoom2, 
-                    x + w / zoom2, y + h / zoom2))
-    return img.resize((w, h), Image.LANCZOS)
-
-
-i = 0
-j = 0
+i = 0 # Iteration counter
+j = 0 # Zoom video frame counter
+p = 1 # Phrase counter
 try:
     with tqdm() as pbar:
         while True:
             train(i)
             
+            # Change generated image
             if args.make_zoom_video:
                 if i % args.zoom_frequency == 0:
                     out = synth(z)
@@ -591,25 +608,30 @@ try:
                     z.requires_grad_(True)
 
                     # Reset optimiser
-                    if args.optimiser == "Adam":
-                        opt = optim.Adam([z], lr=args.step_size)
-                    elif args.optimiser == "AdamW":
-                        opt = optim.AdamW([z], lr=args.step_size)
-                    elif args.optimiser == "Adagrad":
-                        opt = optim.Adagrad([z], lr=args.step_size)
-                    elif args.optimiser == "Adamax":
-                        opt = optim.Adamax([z], lr=args.step_size)
-                    elif args.optimiser == "DiffGrad":
-                         opt = DiffGrad([z], lr=args.step_size)
-                    elif args.optimiser == "AdamP":
-                         opt = AdamP([z], lr=args.step_size)
-                    elif args.optimiser == "RAdam":
-                         opt = RAdam([z], lr=args.step_size)
-                    else:
-                        print("Unknown optimiser. Are choices broken?")
+                    opt = get_opt(args.optimiser)
                     
                     # Next
                     j += 1
+            
+            # Change text prompt
+            if i % args.prompt_frequency == 0 and i > 0:
+                # New text prompt time                
+                pMs = []
+                args.prompts = all_phrases[p]
+
+                # Show user we're changing prompt                                
+                print(args.prompts)
+                
+                for prompt in args.prompts:
+                    txt, weight, stop = split_prompt(prompt)
+                    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+                    pMs.append(Prompt(embed, weight, stop).to(device))
+                
+                p += 1
+                
+                # In case there aren't enough phrases, just loop
+                if p >= len(all_phrases):
+                    p = 0
 
             if i == args.max_iterations:
                 break
@@ -622,22 +644,22 @@ except KeyboardInterrupt:
 
 # Video generation
 if args.make_video or args.make_zoom_video:
-    init_frame = 1 # This is the frame where the video will start
+    init_frame = 1      # Initial video frame
     if args.make_zoom_video:
         last_frame = j
     else:
-        last_frame = i # You can change i to the number of the last frame you want to generate. It will raise an error if that number of frames does not exist.
+        last_frame = i  # This will raise an error if that number of frames does not exist.
+
+    length = args.video_length # Desired time of the video in seconds
 
     min_fps = 10
     max_fps = 60
 
     total_frames = last_frame-init_frame
 
-    length = args.video_length # Desired time of the video in seconds
-
     frames = []
     tqdm.write('Generating video...')
-    for i in range(init_frame,last_frame): #
+    for i in range(init_frame,last_frame):
         frames.append(Image.open("./steps/"+ str(i) +'.png'))
 
     #fps = last_frame/10
