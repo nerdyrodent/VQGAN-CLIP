@@ -84,6 +84,15 @@ Image prompts can be split in the same way. For example:
 python generate.py -p "A picture of a bedroom with a portrait of Van Gogh" -ip "samples/VanGogh.jpg | samples/Bedroom.png"
 ```
 
+### Story mode
+
+Sets of text prompts can be created using the caret symbol, in order to generate a sort of story mode. For example:
+
+```sh
+python generate.py -p "A painting of a sunflower|photo:-1 ^ a painting of a rose ^ a painting of a tulip ^ a painting of a daisy flower ^ a photograph of daffodil" -cpe 1500 -zvid -i 6000 -zse 10 -vl 20 -zsc 1.005 -opt Adagrad -lr 0.15 -se 6000
+```
+
+
 ## "Style Transfer"
 
 An input image with style text and a low number of iterations can be used create a sort of "style transfer" effect. For example:
@@ -187,11 +196,12 @@ optional arguments:
                         Save zoom image iterations
   -zsc ZOOM_SCALE, --zoom_scale ZOOM_SCALE
                         Zoom scale
+  -cpe PROMPT_FREQUENCY, --change_prompt_every PROMPT_FREQUENCY
+                        Prompt change frequency
   -vl VIDEO_LENGTH, --video_length VIDEO_LENGTH
                         Video length in seconds
   -d, --deterministic   Enable cudnn.deterministic?
   -aug, --augments  [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
-
 ```
 
 ## Help
