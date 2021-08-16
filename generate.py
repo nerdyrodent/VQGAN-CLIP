@@ -76,7 +76,7 @@ vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create vid
 vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
 vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
 vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
-vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=1500, dest='prompt_frequency')
+vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=0, dest='prompt_frequency')
 vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds", default=10, dest='video_length')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
@@ -614,24 +614,25 @@ try:
                     j += 1
             
             # Change text prompt
-            if i % args.prompt_frequency == 0 and i > 0:
-                # New text prompt time                
-                pMs = []
-                args.prompts = all_phrases[p]
+            if args.prompt_frequency > 0:
+                if i % args.prompt_frequency == 0 and i > 0:
+                    # New text prompt time                
+                    pMs = []
+                    args.prompts = all_phrases[p]
 
-                # Show user we're changing prompt                                
-                print(args.prompts)
-                
-                for prompt in args.prompts:
-                    txt, weight, stop = split_prompt(prompt)
-                    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
-                    pMs.append(Prompt(embed, weight, stop).to(device))
-                
-                p += 1
-                
-                # In case there aren't enough phrases, just loop
-                if p >= len(all_phrases):
-                    p = 0
+                    # Show user we're changing prompt                                
+                    print(args.prompts)
+                    
+                    for prompt in args.prompts:
+                        txt, weight, stop = split_prompt(prompt)
+                        embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+                        pMs.append(Prompt(embed, weight, stop).to(device))
+                    
+                    p += 1
+                    
+                    # In case there aren't enough phrases, just loop
+                    if p >= len(all_phrases):
+                        p = 0
 
             if i == args.max_iterations:
                 break
