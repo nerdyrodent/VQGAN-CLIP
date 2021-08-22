@@ -661,7 +661,10 @@ if args.make_video or args.make_zoom_video:
     frames = []
     tqdm.write('Generating video...')
     for i in range(init_frame,last_frame):
-        frames.append(Image.open("./steps/"+ str(i) +'.png'))
+        temp = Image.open("./steps/"+ str(i) +'.png')
+        keep = temp.copy()
+        frames.append(keep)
+        temp.close()
 
     #fps = last_frame/10
     fps = np.clip(total_frames/length,min_fps,max_fps)
