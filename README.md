@@ -24,17 +24,36 @@ Environment:
 
 ## Set up
 
-Example set up using Anaconda to create a virtual Python environment with the prerequisites:
+This example requires to have [Anaconda](https://www.anaconda.com/products/individual#Downloads) installed.
+
+Create a virtual Python environment:
 
 ```sh
 conda create --name vqgan python=3.9
 conda activate vqgan
+```
 
+Install Pytorch in the new enviroment:
+
+Note: This installs the CUDA version of Pytorch, if you want to use an AMD graphics card, read the [AMD section below](#using-an-amd-graphics-card).
+
+```sh
 pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
-pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops torch_optimizer
+```
 
-git clone https://github.com/openai/CLIP
-git clone https://github.com/CompVis/taming-transformers.git
+Install other required Python packages in the new enviroment:
+
+```sh
+pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops torch_optimizer
+```
+
+Clone required repositories:
+
+```sh
+git clone 'https://github.com/nerdyrodent/VQGAN-CLIP'
+cd VQGAN-CLIP
+git clone 'https://github.com/openai/CLIP'
+git clone 'https://github.com/CompVis/taming-transformers'
 ```
 
 In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
@@ -56,6 +75,38 @@ By default, the model .yaml and .ckpt files are expected in the `checkpoints` di
 See <https://github.com/CompVis/taming-transformers> for more information on datasets and models.
 
 Information also on [YouTube](https://www.youtube.com/watch?v=1Esb-ZjO7tw).
+
+### Using an AMD graphics card
+
+Note: This hasn't been tested yet.
+
+ROCm can be used for AMD graphics cards instead of CUDA. You can check if your card is supported here:
+<https://github.com/RadeonOpenCompute/ROCm#supported-gpus>
+
+Install ROCm accordng to the instructions and don't forget to add the user to the video group:
+<https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html>
+
+The usage and set up instructions above are the same, except for the line where you install Pytorch.
+Instead of `pip install torch==1.9.0+cu111 ...`, use the one or two lines which are displayed here (select Pip -> Python-> ROCm):
+<https://pytorch.org/get-started/locally/>
+
+### Using the CPU
+
+If no graphics card can be found, the CPU is automatically used and a warning displayed.
+
+Regardless of an available graphics card the CPU can also be used by adding this command line argument: `-cd cpu`
+
+This works with the CUDA version of Pytorch, even without CUDA drivers installed, but doesn't seem to work with ROCm as of now.
+
+### Uninstalling
+
+Remove the Python enviroment:
+
+```sh
+conda remove --name vqgan --all
+```
+
+and delete the `VQGAN-CLIP` folder.
 
 ## Run
 
@@ -147,6 +198,7 @@ usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-s
  [-conf VQGAN_CONFIG] [-ckpt VQGAN_CHECKPOINT] [-nps [NOISE_PROMPT_SEEDS ...]]
  [-npw [NOISE_PROMPT_WEIGHTS ...]] [-lr STEP_SIZE] [-cuts CUTN] [-cutp CUT_POW]
  [-sd SEED] [-opt OPTIMISER] [-o OUTPUT] [-vid MAKE_VIDEO] [-d CUDNN_DETERMINISM] [-aug AUGMENT]
+ [-cd CUDA_DEVICE]
 ```
 
 ```sh
@@ -202,6 +254,8 @@ optional arguments:
                         Video length in seconds
   -d, --deterministic   Enable cudnn.deterministic?
   -aug, --augments  [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
+  -cd CUDA_DEVICE, --cuda_device CUDA_DEVICE
+                        Cuda device to use
 ```
 
 ## Help
