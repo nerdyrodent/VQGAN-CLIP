@@ -44,10 +44,12 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# Reduce the default image size if low VRAM
-default_image_size = 512
-if get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
-    default_image_size = 318
+# Check for GPU and reduce the default image size if low VRAM
+default_image_size = 512  # >8GB VRAM
+if not torch.cuda.is_available():
+    default_image_size = 256  # no GPU found
+elif get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
+    default_image_size = 318  # <8GB VRAM
 
 # Create the parser
 vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
@@ -80,6 +82,7 @@ vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt 
 vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds", default=10, dest='video_length')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
+vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to use", default="cuda:0", dest='cuda_device')
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
@@ -116,6 +119,12 @@ if args.make_video and args.make_zoom_video:
 if args.make_video or args.make_zoom_video:
     if not os.path.exists('steps'):
         os.mkdir('steps')
+
+# Fallback to CPU if GPU is not found
+if not args.cuda_device == 'cpu' and not torch.cuda.is_available():
+    args.cuda_device = 'cpu'
+    print("Warning: No GPU found! Using the CPU instead. The iterations will be slow.")
+    print("Perhaps CUDA/ROCm or the right pytorch version is not properly installed.")
 
 
 # Various functions and classes
@@ -378,7 +387,7 @@ def resize_image(image, out_size):
 
 
 # Do it
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device = torch.device(args.cuda_device)
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
 jit = True if float(torch.__version__[:3]) < 1.8 else False
 perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
