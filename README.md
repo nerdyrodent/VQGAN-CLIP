@@ -238,12 +238,14 @@ optional arguments:
                         Cut power
   -sd SEED, --seed SEED
                         Seed
-  -opt, --optimiser {Adam,AdamW,Adagrad,Adamax,DiffGrad,AdamP,RAdam}
+  -opt, --optimiser {Adam,AdamW,Adagrad,Adamax,DiffGrad,AdamP,RAdam,RMSprop}
                         Optimiser
   -o OUTPUT, --output OUTPUT
                         Output file
   -vid, --video         Create video frames?
   -zvid, --zoom_video   Create zoom video?
+  -zs ZOOM_START, --zoom_start ZOOM_START
+                        Zoom start iteration
   -zse ZOOM_FREQUENCY, --zoom_save_every ZOOM_FREQUENCY
                         Save zoom image iterations
   -zsc ZOOM_SCALE, --zoom_scale ZOOM_SCALE
@@ -252,8 +254,13 @@ optional arguments:
                         Prompt change frequency
   -vl VIDEO_LENGTH, --video_length VIDEO_LENGTH
                         Video length in seconds
+  -ofps OUTPUT_VIDEO_FPS, --output_video_fps OUTPUT_VIDEO_FPS
+                        Create an interpolated video (Nvidia GPU only) with this fps (min 10. best set to 30 or 60)
+  -ifps INPUT_VIDEO_FPS, --input_video_fps INPUT_VIDEO_FPS
+                        When creating an interpolated video, use this as the input fps to interpolate from (>0 & <ofps)
   -d, --deterministic   Enable cudnn.deterministic?
-  -aug, --augments  [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
+  -aug, --augments {Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]
+                        Enabled augments
   -cd CUDA_DEVICE, --cuda_device CUDA_DEVICE
                         Cuda device to use
 ```
