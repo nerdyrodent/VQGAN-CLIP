@@ -72,14 +72,17 @@ vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning ra
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
-vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam'], default='Adam', dest='optimiser')
+vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam','RMSprop'], default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
+vq_parser.add_argument("-zs",   "--zoom_start", type=int, help="Zoom start iteration", default=0, dest='zoom_start')
 vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
 vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
 vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=0, dest='prompt_frequency')
 vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds", default=10, dest='video_length')
+vq_parser.add_argument("-ofps", "--output_video_fps", type=float, help="Create an interpolated video (Nvidia GPU only) with this fps (min 10. best set to 30 or 60)", default=0, dest='output_video_fps')
+vq_parser.add_argument("-ifps", "--input_video_fps", type=float, help="When creating an interpolated video, use this as the input fps to interpolate from (>0 & <ofps)", default=15, dest='input_video_fps')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
 vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
 vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to use", default="cuda:0", dest='cuda_device')
@@ -120,11 +123,13 @@ if args.make_video or args.make_zoom_video:
     if not os.path.exists('steps'):
         os.mkdir('steps')
 
-# Fallback to CPU if GPU is not found
+# Fallback to CPU if CUDA is not found and make sure GPU video rendering is also disabled
+# NB. May not work for AMD cards?
 if not args.cuda_device == 'cpu' and not torch.cuda.is_available():
     args.cuda_device = 'cpu'
+    args.video_fps = 0
     print("Warning: No GPU found! Using the CPU instead. The iterations will be slow.")
-    print("Perhaps CUDA/ROCm or the right pytorch version is not properly installed.")
+    print("Perhaps CUDA/ROCm or the right pytorch version is not properly installed?")
 
 
 # Various functions and classes
@@ -278,9 +283,9 @@ class MakeCutouts(nn.Module):
         augment_list = []
         for item in args.augments[0]:
             if item == 'Ji':
-                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=0.5))
+                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=0.7))
             elif item == 'Sh':
-                augment_list.append(K.RandomSharpness(sharpness=0.4, p=0.7))
+                augment_list.append(K.RandomSharpness(sharpness=0.3, p=0.5))
             elif item == 'Gn':
                 augment_list.append(K.RandomGaussianNoise(mean=0.0, std=1., p=0.5))
             elif item == 'Pe':
@@ -288,7 +293,7 @@ class MakeCutouts(nn.Module):
             elif item == 'Ro':
                 augment_list.append(K.RandomRotation(degrees=15, p=0.7))
             elif item == 'Af':
-                augment_list.append(K.RandomAffine(degrees=15, translate=0.1, shear=15, p=0.7, padding_mode='border', keepdim=True)) # border, reflection, zeros
+                augment_list.append(K.RandomAffine(degrees=15, translate=0.1, shear=5, p=0.7, padding_mode='zeros', keepdim=True)) # border, reflection, zeros
             elif item == 'Et':
                 augment_list.append(K.RandomElasticTransform(p=0.7))
             elif item == 'Ts':
@@ -296,15 +301,17 @@ class MakeCutouts(nn.Module):
             elif item == 'Cr':
                 augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5))
             elif item == 'Er':
-                augment_list.append(K.RandomErasing(scale=(.05, .33), ratio=(.3, 1.3), same_on_batch=True, p=0.5))
+                augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
         
+        # Uncomment if you like seeing the list ;)
         # print(augment_list)
         
         self.augs = nn.Sequential(*augment_list)
 
         '''
+        # Previously:
         self.augs = nn.Sequential(
             # Original:
             # K.RandomHorizontalFlip(p=0.5),
@@ -482,27 +489,29 @@ for seed, weight in zip(args.noise_prompt_seeds, args.noise_prompt_weights):
 
 
 # Set the optimiser
-def get_opt(opt_name):
+def get_opt(opt_name, opt_lr):
     if opt_name == "Adam":
-        opt = optim.Adam([z], lr=args.step_size)	# LR=0.1 (Default)
+        opt = optim.Adam([z], lr=opt_lr)	# LR=0.1 (Default)
     elif opt_name == "AdamW":
-        opt = optim.AdamW([z], lr=args.step_size)	# LR=0.2    
+        opt = optim.AdamW([z], lr=opt_lr)	
     elif opt_name == "Adagrad":
-        opt = optim.Adagrad([z], lr=args.step_size)	# LR=0.5+
+        opt = optim.Adagrad([z], lr=opt_lr)	# LR=0.5+
     elif opt_name == "Adamax":
-        opt = optim.Adamax([z], lr=args.step_size)	# LR=0.5+?
+        opt = optim.Adamax([z], lr=opt_lr)	# LR=0.5+
     elif opt_name == "DiffGrad":
-        opt = DiffGrad([z], lr=args.step_size)	    # LR=2+?
+        opt = DiffGrad([z], lr=opt_lr)	    
     elif opt_name == "AdamP":
-        opt = AdamP([z], lr=args.step_size)		    # LR=2+?
+        opt = AdamP([z], lr=opt_lr)		    
     elif opt_name == "RAdam":
-        opt = RAdam([z], lr=args.step_size)		    # LR=2+?
+        opt = RAdam([z], lr=opt_lr)		    
+    elif opt_name == "RMSprop":
+        opt = optim.RMSprop([z], lr=opt_lr)
     else:
         print("Unknown optimiser. Are choices broken?")
-        opt = optim.Adam([z], lr=args.step_size)
+        opt = optim.Adam([z], lr=opt_lr)
     return opt
 
-opt = get_opt(args.optimiser)
+opt = get_opt(args.optimiser, args.step_size)
 
 
 # Output for the user
@@ -565,7 +574,7 @@ def ascend_txt():
         img = np.transpose(img, (1, 2, 0))
         imageio.imwrite('./steps/' + str(i) + '.png', np.array(img))
 
-    return result
+    return result # return loss
 
 
 def train(i):
@@ -587,11 +596,12 @@ def train(i):
 i = 0 # Iteration counter
 j = 0 # Zoom video frame counter
 p = 1 # Phrase counter
+#xition_counter = 0
+lower_lr = args.step_size
+# Do it
 try:
     with tqdm() as pbar:
-        while True:
-            train(i)
-            
+        while True:            
             # Change generated image
             if args.make_zoom_video:
                 if i % args.zoom_frequency == 0:
@@ -600,24 +610,26 @@ try:
                     # Save image
                     img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
                     img = np.transpose(img, (1, 2, 0))
-                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))                    
+                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
 
-                    # Convert z back into a Pil image                    
-                    pil_image = TF.to_pil_image(out[0].cpu())
-                    
-                    # Zoom
-                    pil_image_zoom = zoom_at(pil_image, args.size[0]/2, args.size[1]/2, args.zoom_scale)
-                    
-                    # Convert image back to a tensor again
-                    pil_tensor = TF.to_tensor(pil_image_zoom)
-                    
-                    # Re-encode
-                    z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
-                    z_orig = z.clone()
-                    z.requires_grad_(True)
+                    # Time to start zooming?                    
+                    if args.zoom_start <= i:
+                        # Convert z back into a Pil image                    
+                        pil_image = TF.to_pil_image(out[0].cpu())
+                        
+                        # Zoom
+                        pil_image_zoom = zoom_at(pil_image, args.size[0]/2, args.size[1]/2, args.zoom_scale)
+                        
+                        # Convert image back to a tensor again
+                        pil_tensor = TF.to_tensor(pil_image_zoom)
+                        
+                        # Re-encode
+                        z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+                        z_orig = z.clone()
+                        z.requires_grad_(True)
 
-                    # Reset optimiser
-                    opt = get_opt(args.optimiser)
+                        # Reset optimiser
+                        opt = get_opt(args.optimiser, args.step_size)
                     
                     # Next
                     j += 1
@@ -625,7 +637,10 @@ try:
             # Change text prompt
             if args.prompt_frequency > 0:
                 if i % args.prompt_frequency == 0 and i > 0:
-                    # New text prompt time                
+                    # In case there aren't enough phrases, just loop
+                    if p >= len(all_phrases):
+                        p = 0
+                    
                     pMs = []
                     args.prompts = all_phrases[p]
 
@@ -638,11 +653,11 @@ try:
                         pMs.append(Prompt(embed, weight, stop).to(device))
                     
                     p += 1
-                    
-                    # In case there aren't enough phrases, just loop
-                    if p >= len(all_phrases):
-                        p = 0
 
+            # Training time
+            train(i)
+            
+            # Ready to stop yet?
             if i == args.max_iterations:
                 break
 
@@ -674,26 +689,57 @@ if args.make_video or args.make_zoom_video:
         keep = temp.copy()
         frames.append(keep)
         temp.close()
-
-    #fps = last_frame/10
-    fps = np.clip(total_frames/length,min_fps,max_fps)
-    output_file = re.compile('\.png$').sub('.mp4', args.output)
-    p = Popen(['ffmpeg',
-               '-y',
-               '-f', 'image2pipe',
-               '-vcodec', 'png',
-               '-r', str(fps),
-               '-i',
-               '-',
-               '-vcodec', 'libx264',
-               '-r', str(fps),
-               '-pix_fmt', 'yuv420p',
-               '-crf', '17',
-               '-preset', 'veryslow',
-               '-metadata', f'comment={args.prompts}',
-               output_file], stdin=PIPE)
-    for im in tqdm(frames):
-        im.save(p.stdin, 'PNG')
-    p.stdin.close()
-    p.wait()
-
+    
+    if args.output_video_fps > 9:
+        # Hardware encoding and video frame interpolation
+        print("Creating interpolated frames...")
+        ffmpeg_filter = f"minterpolate='mi_mode=mci:me_mode=bidir:mc_mode=aobmc:vsbmc=1:fps={args.output_video_fps}'"
+        output_file = re.compile('\.png$').sub('.mp4', args.output)
+        p = Popen(['ffmpeg',
+                   '-y',
+                   '-f', 'image2pipe',
+                   '-vcodec', 'png',
+                   '-r', str(args.input_video_fps),               
+                   '-i',
+                   '-',
+                   '-b:v', '10M',
+                   '-vcodec', 'h264_nvenc',
+                   '-pix_fmt', 'yuv420p',
+                   '-strict', '-2',
+                   '-filter:v', f'{ffmpeg_filter}',
+                   '-metadata', f'comment={args.prompts}',
+                   output_file], stdin=PIPE)               
+        for im in tqdm(frames):
+            im.save(p.stdin, 'PNG')
+        p.stdin.close()
+        p.wait()
+    else:
+        # CPU
+        fps = np.clip(total_frames/length,min_fps,max_fps)
+        output_file = re.compile('\.png$').sub('.mp4', args.output)
+        p = Popen(['ffmpeg',
+                   '-y',
+                   '-f', 'image2pipe',
+                   '-vcodec', 'png',
+                   '-r', str(fps),
+                   '-i',
+                   '-',
+                   '-vcodec', 'libx264',
+                   '-r', str(fps),
+                   '-pix_fmt', 'yuv420p',
+                   '-crf', '17',
+                   '-preset', 'veryslow',
+                   '-metadata', f'comment={args.prompts}',
+                   output_file], stdin=PIPE)               
+        for im in tqdm(frames):
+            im.save(p.stdin, 'PNG')
+        p.stdin.close()
+        p.wait()    
+    
+    
+#    ffmpeg -y -i "$FILENAME_NO_EXT"-%04d."$FILE_EXTENSION" -b:v 8M -c:v h264_nvenc -pix_fmt yuv420p -strict -2 -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=60'" video.mp4
+    
+    
+    
+    
+    
