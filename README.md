@@ -268,11 +268,16 @@ optional arguments:
                         Cuda device to use
 ```
 
-## Help
+## Troubleshooting
 
 ### `RuntimeError: cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling cusolverDnCreate(handle)`
 
 Make sure you have specified the correct size for the image. For more information please refer to [#6](/issues/6)
+
+### `RuntimeError: CUDA out of memory. Tried to allocate 150.00 MiB (GPU 0; 23.70 GiB total capacity; 21.31 GiB already allocated; 78.56 MiB free; 21.70 GiB reserved in total by PyTorch)`
+
+Your request doesn't fit into your GPU's VRAM. Reduce the image size or number of cuts.
+
 
 ## Citations
 
