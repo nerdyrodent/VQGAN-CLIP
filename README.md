@@ -24,9 +24,9 @@ Environment:
 
 ## Set up
 
-This example requires to have [Anaconda](https://www.anaconda.com/products/individual#Downloads) installed.
+This example uses [Anaconda](https://www.anaconda.com/products/individual#Downloads) to manage virtual Python environments.
 
-Create a virtual Python environment:
+Create a new virtual Python environment for VQGAN-CLIP:
 
 ```sh
 conda create --name vqgan python=3.9
@@ -41,7 +41,7 @@ Note: This installs the CUDA version of Pytorch, if you want to use an AMD graph
 pip install torch==1.9.0+cu111 torchvision==0.10.0+cu111 torchaudio==0.9.0 -f https://download.pytorch.org/whl/torch_stable.html
 ```
 
-Install other required Python packages in the new enviroment:
+Install other required Python packages:
 
 ```sh
 pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops torch_optimizer
@@ -56,7 +56,7 @@ git clone 'https://github.com/openai/CLIP'
 git clone 'https://github.com/CompVis/taming-transformers'
 ```
 
-In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
+Note: In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
 
 You will also need at least 1 VQGAN pretrained model. E.g.
 
@@ -69,7 +69,7 @@ curl -L -o checkpoints/vqgan_imagenet_f16_16384.ckpt -C - 'https://heibox.uni-he
 
 The `download_models.sh` script is an optional way to download a number of models. By default, it will download just 1 model.
 
-See <https://github.com/CompVis/taming-transformers#overview-of-pretrained-models> for more information about pre-trained models.
+See <https://github.com/CompVis/taming-transformers#overview-of-pretrained-models> for more information about VQGAN pre-trained models, including download links.
 
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
 See <https://github.com/CompVis/taming-transformers> for more information on datasets and models.
@@ -94,7 +94,7 @@ Instead of `pip install torch==1.9.0+cu111 ...`, use the one or two lines which 
 
 If no graphics card can be found, the CPU is automatically used and a warning displayed.
 
-Regardless of an available graphics card the CPU can also be used by adding this command line argument: `-cd cpu`
+Regardless of an available graphics card, the CPU can also be used by adding this command line argument: `-cd cpu`
 
 This works with the CUDA version of Pytorch, even without CUDA drivers installed, but doesn't seem to work with ROCm as of now.
 
@@ -106,7 +106,7 @@ Remove the Python enviroment:
 conda remove --name vqgan --all
 ```
 
-and delete the `VQGAN-CLIP` folder.
+and delete the `VQGAN-CLIP` directory.
 
 ## Run
 
