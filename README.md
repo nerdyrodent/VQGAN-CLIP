@@ -74,7 +74,9 @@ See <https://github.com/CompVis/taming-transformers#overview-of-pretrained-model
 By default, the model .yaml and .ckpt files are expected in the `checkpoints` directory.
 See <https://github.com/CompVis/taming-transformers> for more information on datasets and models.
 
-Information also on [YouTube](https://www.youtube.com/watch?v=1Esb-ZjO7tw).
+Video guides are also available:
+* Linux - https://www.youtube.com/watch?v=1Esb-ZjO7tw
+* Windows - https://www.youtube.com/watch?v=XH7ZP0__FXs
 
 ### Using an AMD graphics card
 
