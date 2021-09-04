@@ -3,6 +3,7 @@
 
 import argparse
 import math
+import random
 # from email.policy import default
 from urllib.request import urlopen
 from tqdm import tqdm
@@ -69,6 +70,7 @@ vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN chec
 vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
 vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
 vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
+vq_parser.add_argument("-cutm", "--cut_method", type=str, help="Cut method", choices=['original','updated','updatedpooling','latest'], default='latest', dest='cut_method')
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
@@ -80,7 +82,7 @@ vq_parser.add_argument("-zs",   "--zoom_start", type=int, help="Zoom start itera
 vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
 vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
 vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=0, dest='prompt_frequency')
-vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds", default=10, dest='video_length')
+vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds (not interpolated)", default=10, dest='video_length')
 vq_parser.add_argument("-ofps", "--output_video_fps", type=float, help="Create an interpolated video (Nvidia GPU only) with this fps (min 10. best set to 30 or 60)", default=0, dest='output_video_fps')
 vq_parser.add_argument("-ifps", "--input_video_fps", type=float, help="When creating an interpolated video, use this as the input fps to interpolate from (>0 & <ofps)", default=15, dest='input_video_fps')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
@@ -89,6 +91,8 @@ vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to 
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
+if not args.prompts and not args.image_prompts:
+    args. prompts = "A cute, smiling, Nerdy Rodent"
 
 if args.cudnn_determinism:
    torch.backends.cudnn.deterministic = True
@@ -297,9 +301,9 @@ class MakeCutouts(nn.Module):
             elif item == 'Et':
                 augment_list.append(K.RandomElasticTransform(p=0.7))
             elif item == 'Ts':
-                augment_list.append(K.RandomThinPlateSpline(scale=0.3, same_on_batch=False, p=0.7))
+                augment_list.append(K.RandomThinPlateSpline(scale=0.8, same_on_batch=True, p=0.7))
             elif item == 'Cr':
-                augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5))
+                augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), pad_if_needed=True, padding_mode='reflect', p=0.5))
             elif item == 'Er':
                 augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
@@ -309,26 +313,6 @@ class MakeCutouts(nn.Module):
         # print(augment_list)
         
         self.augs = nn.Sequential(*augment_list)
-
-        '''
-        # Previously:
-        self.augs = nn.Sequential(
-            # Original:
-            # K.RandomHorizontalFlip(p=0.5),
-            # K.RandomVerticalFlip(p=0.5),
-            # K.RandomSolarize(0.01, 0.01, p=0.7),
-            # K.RandomSharpness(0.3,p=0.4),
-            # K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5),
-            # K.RandomCrop(size=(self.cut_size,self.cut_size), p=0.5), 
-
-            # Updated colab:
-            K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
-            K.RandomPerspective(0.7,p=0.7),
-            K.ColorJitter(hue=0.1, saturation=0.1, p=0.7),
-            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),        
-            )
-        '''
-            
         self.noise_fac = 0.1
         # self.noise_fac = False
         
@@ -337,19 +321,9 @@ class MakeCutouts(nn.Module):
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
 
     def forward(self, input):
-        # sideY, sideX = input.shape[2:4]
-        # max_size = min(sideX, sideY)
-        # min_size = min(sideX, sideY, self.cut_size)
         cutouts = []
         
-        for _ in range(self.cutn):
-            # size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
-            # offsetx = torch.randint(0, sideX - size + 1, ())
-            # offsety = torch.randint(0, sideY - size + 1, ())
-            # cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
-            # cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
-            # cutout = transforms.Resize(size=(self.cut_size, self.cut_size))(input)
-            
+        for _ in range(self.cutn):            
             # Use Pooling
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
@@ -360,6 +334,100 @@ class MakeCutouts(nn.Module):
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
         return batch
+
+
+# An updated version with Kornia augments and pooling (where my version started):
+class MakeCutoutsPoolingUpdate(nn.Module):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cut_pow = cut_pow
+
+        self.augs = nn.Sequential(
+            K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
+            K.RandomPerspective(0.7,p=0.7),
+            K.ColorJitter(hue=0.1, saturation=0.1, p=0.7),
+            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),            
+        )
+        
+        self.noise_fac = 0.1
+        self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
+        self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
+
+    def forward(self, input):
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        
+        for _ in range(self.cutn):
+            cutout = (self.av_pool(input) + self.max_pool(input))/2
+            cutouts.append(cutout)
+            
+        batch = self.augs(torch.cat(cutouts, dim=0))
+        
+        if self.noise_fac:
+            facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
+            batch = batch + facs * torch.randn_like(batch)
+        return batch
+
+
+# An updated version with Kornia augments, but no pooling:
+class MakeCutoutsUpdate(nn.Module):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cut_pow = cut_pow
+        self.augs = nn.Sequential(
+            K.RandomHorizontalFlip(p=0.5),
+            K.ColorJitter(hue=0.01, saturation=0.01, p=0.7),
+            # K.RandomSolarize(0.01, 0.01, p=0.7),
+            K.RandomSharpness(0.3,p=0.4),
+            K.RandomAffine(degrees=30, translate=0.1, p=0.8, padding_mode='border'),
+            K.RandomPerspective(0.2,p=0.4),)
+        self.noise_fac = 0.1
+
+
+    def forward(self, input):
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        for _ in range(self.cutn):
+            size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
+            offsetx = torch.randint(0, sideX - size + 1, ())
+            offsety = torch.randint(0, sideY - size + 1, ())
+            cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
+            cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
+        batch = self.augs(torch.cat(cutouts, dim=0))
+        if self.noise_fac:
+            facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
+            batch = batch + facs * torch.randn_like(batch)
+        return batch
+
+
+# This is the original version (No pooling)
+class MakeCutoutsOrig(nn.Module):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cut_pow = cut_pow
+
+    def forward(self, input):
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        for _ in range(self.cutn):
+            size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
+            offsetx = torch.randint(0, sideX - size + 1, ())
+            offsety = torch.randint(0, sideY - size + 1, ())
+            cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
+            cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
+        return clamp_with_grad(torch.cat(cutouts, dim=0), 0, 1)
 
 
 def load_vqgan_model(config_path, checkpoint_path):
@@ -406,11 +474,24 @@ perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).
 cut_size = perceptor.visual.input_resolution
 
 f = 2**(model.decoder.num_resolutions - 1)
-make_cutouts = MakeCutouts(cut_size, args.cutn, cut_pow=args.cut_pow)
+#make_cutouts = MakeCutoutsOrig(cut_size, args.cutn, cut_pow=args.cut_pow)
+
+# Cutout class options:
+# 'latest','original','updated' or 'updatedpooling'
+if args.cut_method == 'latest':
+    make_cutouts = MakeCutouts(cut_size, args.cutn, cut_pow=args.cut_pow)
+elif args.cut_method == 'original':
+    make_cutouts = MakeCutoutsOrig(cut_size, args.cutn, cut_pow=args.cut_pow)
+elif args.cut_method == 'updated':
+    make_cutouts = MakeCutoutsUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)
+else:
+    make_cutouts = MakeCutoutsPoolingUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)    
+
 
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
 
+# Gumbel or not?
 if gumbel:
     e_dim = 256
     n_toks = model.quantize.n_embed
@@ -596,8 +677,12 @@ def train(i):
 i = 0 # Iteration counter
 j = 0 # Zoom video frame counter
 p = 1 # Phrase counter
-#xition_counter = 0
-lower_lr = args.step_size
+smoother = 0 # Smoother counter
+
+# Messing with learning rate / optimisers
+#variable_lr = args.step_size
+#optimiser_list = [['Adam',0.09],['AdamW',0.15],['Adagrad',0.25],['Adamax',0.15],['DiffGrad',0.09],['RAdam',0.15],['RMSprop',0.06]]
+
 # Do it
 try:
     with tqdm() as pbar:
@@ -651,8 +736,33 @@ try:
                         txt, weight, stop = split_prompt(prompt)
                         embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
                         pMs.append(Prompt(embed, weight, stop).to(device))
+                                        
+                    '''
+                    # Smooth test
+                    smoother = args.zoom_frequency * 15
+                    variable_lr = args.step_size * 0.25
+                    opt = get_opt(args.optimiser, variable_lr)
+                    '''
                     
                     p += 1
+            
+            '''
+            if smoother > 0:
+                if smoother == 1:
+                    opt = get_opt(args.optimiser, args.step_size)
+                smoother -= 1
+            '''
+            
+            '''        
+            # Messing with learning rate / optimisers
+            if i % 300 == 0 and i > 0:
+                variable_optimiser_item = random.choice(optimiser_list)
+                variable_optimiser = variable_optimiser_item[0]
+                variable_lr = variable_optimiser_item[1]
+                
+                opt = get_opt(variable_optimiser, variable_lr)
+                print("New opt: %s, lr= %f" %(variable_optimiser,variable_lr)) 
+            '''          
 
             # Training time
             train(i)
@@ -693,7 +803,7 @@ if args.make_video or args.make_zoom_video:
     if args.output_video_fps > 9:
         # Hardware encoding and video frame interpolation
         print("Creating interpolated frames...")
-        ffmpeg_filter = f"minterpolate='mi_mode=mci:me_mode=bidir:mc_mode=aobmc:vsbmc=1:fps={args.output_video_fps}'"
+        ffmpeg_filter = f"minterpolate='mi_mode=mci:me=hexbs:me_mode=bidir:mc_mode=aobmc:vsbmc=1:mb_size=8:search_param=32:fps={args.output_video_fps}'"
         output_file = re.compile('\.png$').sub('.mp4', args.output)
         p = Popen(['ffmpeg',
                    '-y',
@@ -734,12 +844,4 @@ if args.make_video or args.make_zoom_video:
         for im in tqdm(frames):
             im.save(p.stdin, 'PNG')
         p.stdin.close()
-        p.wait()    
-    
-    
-#    ffmpeg -y -i "$FILENAME_NO_EXT"-%04d."$FILE_EXTENSION" -b:v 8M -c:v h264_nvenc -pix_fmt yuv420p -strict -2 -filter:v "minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=60'" video.mp4
-    
-    
-    
-    
-    
+        p.wait()     
