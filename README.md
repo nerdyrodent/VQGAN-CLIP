@@ -160,7 +160,7 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 | <img src="./samples/vvg_sketch.png" width="256px"></img>      | Sketch      |
 | <img src="./samples/vvg_psychedelic.png" width="256px"></img> | Psychedelic |
 
-A video style transfer effect can be achived using by specifying a directory of video frames in `video_style_dir`
+A video style transfer effect can be achived using by specifying a directory of video frames in `video_style_dir`. Output will be saved in the steps directory, using the original video frame filenames.
 
 ## Feedback example
 
