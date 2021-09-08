@@ -70,7 +70,7 @@ vq_parser.add_argument("-ckpt", "--vqgan_checkpoint", type=str, help="VQGAN chec
 vq_parser.add_argument("-nps",  "--noise_prompt_seeds", nargs="*", type=int, help="Noise prompt seeds", default=[], dest='noise_prompt_seeds')
 vq_parser.add_argument("-npw",  "--noise_prompt_weights", nargs="*", type=float, help="Noise prompt weights", default=[], dest='noise_prompt_weights')
 vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning rate", default=0.1, dest='step_size')
-vq_parser.add_argument("-cutm", "--cut_method", type=str, help="Cut method", choices=['original','updated','updatedpooling','latest'], default='latest', dest='cut_method')
+vq_parser.add_argument("-cutm", "--cut_method", type=str, help="Cut method", choices=['original','updated','nrupdated','updatedpooling','latest'], default='latest', dest='cut_method')
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
@@ -86,11 +86,14 @@ vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length
 vq_parser.add_argument("-ofps", "--output_video_fps", type=float, help="Create an interpolated video (Nvidia GPU only) with this fps (min 10. best set to 30 or 60)", default=0, dest='output_video_fps')
 vq_parser.add_argument("-ifps", "--input_video_fps", type=float, help="When creating an interpolated video, use this as the input fps to interpolate from (>0 & <ofps)", default=15, dest='input_video_fps')
 vq_parser.add_argument("-d",    "--deterministic", action='store_true', help="Enable cudnn.deterministic?", dest='cudnn_determinism')
-vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments", default=[], dest='augments')
+vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=str, choices=['Ji','Sh','Gn','Pe','Ro','Af','Et','Ts','Cr','Er','Re'], help="Enabled augments (latest vut method only)", default=[], dest='augments')
+vq_parser.add_argument("-vsd",  "--video_style_dir", type=str, help="Directory with video frames to style", default=None, dest='video_style_dir')
 vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to use", default="cuda:0", dest='cuda_device')
+
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
+
 if not args.prompts and not args.image_prompts:
     args. prompts = "A cute, smiling, Nerdy Rodent"
 
@@ -134,6 +137,25 @@ if not args.cuda_device == 'cpu' and not torch.cuda.is_available():
     args.video_fps = 0
     print("Warning: No GPU found! Using the CPU instead. The iterations will be slow.")
     print("Perhaps CUDA/ROCm or the right pytorch version is not properly installed?")
+
+# If a video_style_dir has been, then create a list of all the images
+if args.video_style_dir:
+    print("Locating video frames...")
+    video_frame_list = []
+    for entry in os.scandir(args.video_style_dir):
+        if (entry.path.endswith(".jpg")
+                or entry.path.endswith(".png")) and entry.is_file():
+            video_frame_list.append(entry.path)
+
+    # Reset a few options - same filename, different directory
+    if not os.path.exists('steps'):
+        os.mkdir('steps')
+
+    args.init_image = video_frame_list[0]
+    filename = os.path.basename(args.init_image)
+    cwd = os.getcwd()
+    args.output = os.path.join(cwd, "steps", filename)
+    num_video_frames = len(video_frame_list) # for video styling
 
 
 # Various functions and classes
@@ -195,7 +217,7 @@ def random_gradient_image(w,h):
     return random_image
 
 
-# Not used?
+# Used in older MakeCutouts
 def resample(input, size, align_corners=True):
     n, c, h, w = input.shape
     dh, dw = size
@@ -281,7 +303,7 @@ class MakeCutouts(nn.Module):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
-        self.cut_pow = cut_pow
+        self.cut_pow = cut_pow # not used with pooling
         
         # Pick your own augments & their order
         augment_list = []
@@ -308,13 +330,13 @@ class MakeCutouts(nn.Module):
                 augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
-        
-        # Uncomment if you like seeing the list ;)
-        # print(augment_list)
-        
+                
         self.augs = nn.Sequential(*augment_list)
         self.noise_fac = 0.1
         # self.noise_fac = False
+
+        # Uncomment if you like seeing the list ;)
+        # print(augment_list)
         
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
@@ -342,7 +364,7 @@ class MakeCutoutsPoolingUpdate(nn.Module):
         super().__init__()
         self.cut_size = cut_size
         self.cutn = cutn
-        self.cut_pow = cut_pow
+        self.cut_pow = cut_pow # Not used with pooling
 
         self.augs = nn.Sequential(
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
@@ -367,6 +389,62 @@ class MakeCutoutsPoolingUpdate(nn.Module):
             
         batch = self.augs(torch.cat(cutouts, dim=0))
         
+        if self.noise_fac:
+            facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
+            batch = batch + facs * torch.randn_like(batch)
+        return batch
+
+
+# An Nerdy updated version with selectable Kornia augments, but no pooling:
+class MakeCutoutsNRUpdate(nn.Module):
+    def __init__(self, cut_size, cutn, cut_pow=1.):
+        super().__init__()
+        self.cut_size = cut_size
+        self.cutn = cutn
+        self.cut_pow = cut_pow
+        self.noise_fac = 0.1
+        
+        # Pick your own augments & their order
+        augment_list = []
+        for item in args.augments[0]:
+            if item == 'Ji':
+                augment_list.append(K.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1, p=0.7))
+            elif item == 'Sh':
+                augment_list.append(K.RandomSharpness(sharpness=0.3, p=0.5))
+            elif item == 'Gn':
+                augment_list.append(K.RandomGaussianNoise(mean=0.0, std=1., p=0.5))
+            elif item == 'Pe':
+                augment_list.append(K.RandomPerspective(distortion_scale=0.5, p=0.7))
+            elif item == 'Ro':
+                augment_list.append(K.RandomRotation(degrees=15, p=0.7))
+            elif item == 'Af':
+                augment_list.append(K.RandomAffine(degrees=30, translate=0.1, shear=5, p=0.7, padding_mode='zeros', keepdim=True)) # border, reflection, zeros
+            elif item == 'Et':
+                augment_list.append(K.RandomElasticTransform(p=0.7))
+            elif item == 'Ts':
+                augment_list.append(K.RandomThinPlateSpline(scale=0.8, same_on_batch=True, p=0.7))
+            elif item == 'Cr':
+                augment_list.append(K.RandomCrop(size=(self.cut_size,self.cut_size), pad_if_needed=True, padding_mode='reflect', p=0.5))
+            elif item == 'Er':
+                augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
+            elif item == 'Re':
+                augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
+                
+        self.augs = nn.Sequential(*augment_list)
+
+
+    def forward(self, input):
+        sideY, sideX = input.shape[2:4]
+        max_size = min(sideX, sideY)
+        min_size = min(sideX, sideY, self.cut_size)
+        cutouts = []
+        for _ in range(self.cutn):
+            size = int(torch.rand([])**self.cut_pow * (max_size - min_size) + min_size)
+            offsetx = torch.randint(0, sideX - size + 1, ())
+            offsety = torch.randint(0, sideY - size + 1, ())
+            cutout = input[:, :, offsety:offsety + size, offsetx:offsetx + size]
+            cutouts.append(resample(cutout, (self.cut_size, self.cut_size)))
+        batch = self.augs(torch.cat(cutouts, dim=0))
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
@@ -472,9 +550,7 @@ perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).
 # perceptor.visual.positional_embedding.data=clamp_with_grad(clock,0,1)
 
 cut_size = perceptor.visual.input_resolution
-
 f = 2**(model.decoder.num_resolutions - 1)
-#make_cutouts = MakeCutoutsOrig(cut_size, args.cutn, cut_pow=args.cut_pow)
 
 # Cutout class options:
 # 'latest','original','updated' or 'updatedpooling'
@@ -484,9 +560,10 @@ elif args.cut_method == 'original':
     make_cutouts = MakeCutoutsOrig(cut_size, args.cutn, cut_pow=args.cut_pow)
 elif args.cut_method == 'updated':
     make_cutouts = MakeCutoutsUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)
+elif args.cut_method == 'nrupdated':
+    make_cutouts = MakeCutoutsNRUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)
 else:
     make_cutouts = MakeCutoutsPoolingUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)    
-
 
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
@@ -504,7 +581,6 @@ else:
     z_max = model.quantize.embedding.weight.max(dim=0).values[None, :, None, None]
 
 
-# Image initialisation
 if args.init_image:
     if 'http' in args.init_image:
       img = Image.open(urlopen(args.init_image))
@@ -678,10 +754,11 @@ i = 0 # Iteration counter
 j = 0 # Zoom video frame counter
 p = 1 # Phrase counter
 smoother = 0 # Smoother counter
+this_video_frame = 0 # for video styling
 
 # Messing with learning rate / optimisers
 #variable_lr = args.step_size
-#optimiser_list = [['Adam',0.09],['AdamW',0.15],['Adagrad',0.25],['Adamax',0.15],['DiffGrad',0.09],['RAdam',0.15],['RMSprop',0.06]]
+#optimiser_list = [['Adam',0.085],['AdamW',0.125],['Adagrad',0.225],['Adamax',0.125],['DiffGrad',0.08],['RAdam',0.125],['RMSprop',0.04]]
 
 # Do it
 try:
@@ -700,10 +777,13 @@ try:
                     # Time to start zooming?                    
                     if args.zoom_start <= i:
                         # Convert z back into a Pil image                    
-                        pil_image = TF.to_pil_image(out[0].cpu())
+                        #pil_image = TF.to_pil_image(out[0].cpu())
                         
+                        # Convert NP to Pil image
+                        pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
+                                                
                         # Zoom
-                        pil_image_zoom = zoom_at(pil_image, args.size[0]/2, args.size[1]/2, args.zoom_scale)
+                        pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, args.zoom_scale)
                         
                         # Convert image back to a tensor again
                         pil_tensor = TF.to_tensor(pil_image_zoom)
@@ -713,7 +793,7 @@ try:
                         z_orig = z.clone()
                         z.requires_grad_(True)
 
-                        # Reset optimiser
+                        # Re-create optimiser
                         opt = get_opt(args.optimiser, args.step_size)
                     
                     # Next
@@ -739,7 +819,7 @@ try:
                                         
                     '''
                     # Smooth test
-                    smoother = args.zoom_frequency * 15
+                    smoother = args.zoom_frequency * 15 # smoothing over x frames
                     variable_lr = args.step_size * 0.25
                     opt = get_opt(args.optimiser, variable_lr)
                     '''
@@ -755,7 +835,7 @@ try:
             
             '''        
             # Messing with learning rate / optimisers
-            if i % 300 == 0 and i > 0:
+            if i % 225 == 0 and i > 0:
                 variable_optimiser_item = random.choice(optimiser_list)
                 variable_optimiser = variable_optimiser_item[0]
                 variable_lr = variable_optimiser_item[1]
@@ -769,13 +849,56 @@ try:
             
             # Ready to stop yet?
             if i == args.max_iterations:
-                break
+                if not args.video_style_dir:
+                    # we're done
+                    break
+                else:                    
+                    if this_video_frame == (num_video_frames - 1):
+                        # we're done
+                        make_styled_video = True
+                        break
+                    else:
+                        # Next video frame
+                        this_video_frame += 1
+
+                        # Reset the iteration count
+                        i = -1
+                        pbar.reset()
+                                                
+                        # Load the next frame, reset a few options - same filename, different directory
+                        args.init_image = video_frame_list[this_video_frame]
+                        print("Next frame: ", args.init_image)
+
+                        if args.seed is None:
+                            seed = torch.seed()
+                        else:
+                            seed = args.seed  
+                        torch.manual_seed(seed)
+                        print("Seed: ", seed)
+
+                        filename = os.path.basename(args.init_image)
+                        args.output = os.path.join(cwd, "steps", filename)
+
+                        # Load and resize image
+                        img = Image.open(args.init_image)
+                        pil_image = img.convert('RGB')
+                        pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
+                        pil_tensor = TF.to_tensor(pil_image)
+                        
+                        # Re-encode
+                        z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+                        z_orig = z.clone()
+                        z.requires_grad_(True)
+
+                        # Re-create optimiser
+                        opt = get_opt(args.optimiser, args.step_size)
 
             i += 1
             pbar.update()
 except KeyboardInterrupt:
     pass
 
+# All done :)
 
 # Video generation
 if args.make_video or args.make_zoom_video:
@@ -805,20 +928,23 @@ if args.make_video or args.make_zoom_video:
         print("Creating interpolated frames...")
         ffmpeg_filter = f"minterpolate='mi_mode=mci:me=hexbs:me_mode=bidir:mc_mode=aobmc:vsbmc=1:mb_size=8:search_param=32:fps={args.output_video_fps}'"
         output_file = re.compile('\.png$').sub('.mp4', args.output)
-        p = Popen(['ffmpeg',
-                   '-y',
-                   '-f', 'image2pipe',
-                   '-vcodec', 'png',
-                   '-r', str(args.input_video_fps),               
-                   '-i',
-                   '-',
-                   '-b:v', '10M',
-                   '-vcodec', 'h264_nvenc',
-                   '-pix_fmt', 'yuv420p',
-                   '-strict', '-2',
-                   '-filter:v', f'{ffmpeg_filter}',
-                   '-metadata', f'comment={args.prompts}',
-                   output_file], stdin=PIPE)               
+        try:
+            p = Popen(['ffmpeg',
+                       '-y',
+                       '-f', 'image2pipe',
+                       '-vcodec', 'png',
+                       '-r', str(args.input_video_fps),               
+                       '-i',
+                       '-',
+                       '-b:v', '10M',
+                       '-vcodec', 'h264_nvenc',
+                       '-pix_fmt', 'yuv420p',
+                       '-strict', '-2',
+                       '-filter:v', f'{ffmpeg_filter}',
+                       '-metadata', f'comment={args.prompts}',
+                   output_file], stdin=PIPE)
+        except FileNotFoundError:
+            print("ffmpeg command failed - check your installation")
         for im in tqdm(frames):
             im.save(p.stdin, 'PNG')
         p.stdin.close()
@@ -827,20 +953,23 @@ if args.make_video or args.make_zoom_video:
         # CPU
         fps = np.clip(total_frames/length,min_fps,max_fps)
         output_file = re.compile('\.png$').sub('.mp4', args.output)
-        p = Popen(['ffmpeg',
-                   '-y',
-                   '-f', 'image2pipe',
-                   '-vcodec', 'png',
-                   '-r', str(fps),
-                   '-i',
-                   '-',
-                   '-vcodec', 'libx264',
-                   '-r', str(fps),
-                   '-pix_fmt', 'yuv420p',
-                   '-crf', '17',
-                   '-preset', 'veryslow',
-                   '-metadata', f'comment={args.prompts}',
-                   output_file], stdin=PIPE)               
+        try:
+            p = Popen(['ffmpeg',
+                       '-y',
+                       '-f', 'image2pipe',
+                       '-vcodec', 'png',
+                       '-r', str(fps),
+                       '-i',
+                       '-',
+                       '-vcodec', 'libx264',
+                       '-r', str(fps),
+                       '-pix_fmt', 'yuv420p',
+                       '-crf', '17',
+                       '-preset', 'veryslow',
+                       '-metadata', f'comment={args.prompts}',
+                       output_file], stdin=PIPE)
+        except FileNotFoundError:
+            print("ffmpeg command failed - check your installation")        
         for im in tqdm(frames):
             im.save(p.stdin, 'PNG')
         p.stdin.close()
