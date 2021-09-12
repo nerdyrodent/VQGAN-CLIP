@@ -10,9 +10,9 @@ from tqdm import tqdm
 import sys
 import os
 
-# pip install taming-transformers works with Gumbel, but does not yet work with coco etc
-# appending the path works with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
-sys.path.append('taming-transformers')
+# pip install taming-transformers doesn't work with Gumbel, but does not yet work with coco etc
+# appending the path does work with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
+#sys.path.append('taming-transformers')
 
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
@@ -34,7 +34,7 @@ import kornia.augmentation as K
 import numpy as np
 import imageio
 
-from PIL import ImageFile, Image, PngImagePlugin
+from PIL import ImageFile, Image, PngImagePlugin, ImageChops
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from subprocess import Popen, PIPE
@@ -80,7 +80,9 @@ vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create vid
 vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
 vq_parser.add_argument("-zs",   "--zoom_start", type=int, help="Zoom start iteration", default=0, dest='zoom_start')
 vq_parser.add_argument("-zse",  "--zoom_save_every", type=int, help="Save zoom image iterations", default=10, dest='zoom_frequency')
-vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale", default=0.99, dest='zoom_scale')
+vq_parser.add_argument("-zsc",  "--zoom_scale", type=float, help="Zoom scale %", default=0.99, dest='zoom_scale')
+vq_parser.add_argument("-zsx",  "--zoom_shift_x", type=int, help="Zoom shift x (left/right) amount in pixels", default=0, dest='zoom_shift_x')
+vq_parser.add_argument("-zsy",  "--zoom_shift_y", type=int, help="Zoom shift y (up/down) amount in pixels", default=0, dest='zoom_shift_y')
 vq_parser.add_argument("-cpe",  "--change_prompt_every", type=int, help="Prompt change frequency", default=0, dest='prompt_frequency')
 vq_parser.add_argument("-vl",   "--video_length", type=float, help="Video length in seconds (not interpolated)", default=10, dest='video_length')
 vq_parser.add_argument("-ofps", "--output_video_fps", type=float, help="Create an interpolated video (Nvidia GPU only) with this fps (min 10. best set to 30 or 60)", default=0, dest='output_video_fps')
@@ -757,8 +759,8 @@ smoother = 0 # Smoother counter
 this_video_frame = 0 # for video styling
 
 # Messing with learning rate / optimisers
-#variable_lr = args.step_size
-#optimiser_list = [['Adam',0.085],['AdamW',0.125],['Adagrad',0.225],['Adamax',0.125],['DiffGrad',0.08],['RAdam',0.125],['RMSprop',0.04]]
+variable_lr = args.step_size
+optimiser_list = [['Adam',0.075],['AdamW',0.125],['Adagrad',0.2],['Adamax',0.125],['DiffGrad',0.075],['RAdam',0.125],['RMSprop',0.02]]
 
 # Do it
 try:
@@ -783,7 +785,15 @@ try:
                         pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
                                                 
                         # Zoom
-                        pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, args.zoom_scale)
+                        if args.zoom_scale != 1:
+                            pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, args.zoom_scale)
+                        else:
+                            pil_image_zoom = pil_image
+                        
+                        # Shift - https://pillow.readthedocs.io/en/latest/reference/ImageChops.html
+                        if args.zoom_shift_x or args.zoom_shift_y:
+                            # This one wraps the image
+                            pil_image_zoom = ImageChops.offset(pil_image_zoom, args.zoom_shift_x, args.zoom_shift_y)
                         
                         # Convert image back to a tensor again
                         pil_tensor = TF.to_tensor(pil_image_zoom)
@@ -833,7 +843,7 @@ try:
                 smoother -= 1
             '''
             
-            '''        
+            '''
             # Messing with learning rate / optimisers
             if i % 225 == 0 and i > 0:
                 variable_optimiser_item = random.choice(optimiser_list)
@@ -842,7 +852,8 @@ try:
                 
                 opt = get_opt(variable_optimiser, variable_lr)
                 print("New opt: %s, lr= %f" %(variable_optimiser,variable_lr)) 
-            '''          
+            '''
+            
 
             # Training time
             train(i)
