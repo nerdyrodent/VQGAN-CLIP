@@ -58,6 +58,8 @@ git clone 'https://github.com/CompVis/taming-transformers'
 
 Note: In my development environment both CLIP and taming-transformers are present in the local directory, and so aren't present in the `requirements.txt` or `vqgan.yml` files.
 
+As an alternative, you can also pip install taming-transformers and CLIP.
+
 You will also need at least 1 VQGAN pretrained model. E.g.
 
 ```sh
