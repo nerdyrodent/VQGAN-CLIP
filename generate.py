@@ -12,7 +12,7 @@ import os
 
 # pip install taming-transformers doesn't work with Gumbel, but does not yet work with coco etc
 # appending the path does work with Gumbel, but gives ModuleNotFoundError: No module named 'transformers' for coco etc
-#sys.path.append('taming-transformers')
+sys.path.append('taming-transformers')
 
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
@@ -75,7 +75,7 @@ vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", d
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam','RMSprop'], default='Adam', dest='optimiser')
-vq_parser.add_argument("-o",    "--output", type=str, help="Output file", default="output.png", dest='output')
+vq_parser.add_argument("-o",    "--output", type=str, help="Output filename", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
 vq_parser.add_argument("-zs",   "--zoom_start", type=int, help="Zoom start iteration", default=0, dest='zoom_start')
@@ -97,7 +97,7 @@ vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to 
 args = vq_parser.parse_args()
 
 if not args.prompts and not args.image_prompts:
-    args. prompts = "A cute, smiling, Nerdy Rodent"
+    args.prompts = "A cute, smiling, Nerdy Rodent"
 
 if args.cudnn_determinism:
    torch.backends.cudnn.deterministic = True
@@ -627,10 +627,11 @@ normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
 #                                  std=[0.229, 0.224, 0.225])
 
 # CLIP tokenize/encode   
-for prompt in args.prompts:
-    txt, weight, stop = split_prompt(prompt)
-    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
-    pMs.append(Prompt(embed, weight, stop).to(device))
+if args.prompts:
+    for prompt in args.prompts:
+        txt, weight, stop = split_prompt(prompt)
+        embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+        pMs.append(Prompt(embed, weight, stop).to(device))
 
 for prompt in args.image_prompts:
     path, weight, stop = split_prompt(prompt)
@@ -654,11 +655,11 @@ def get_opt(opt_name, opt_lr):
     elif opt_name == "AdamW":
         opt = optim.AdamW([z], lr=opt_lr)	
     elif opt_name == "Adagrad":
-        opt = optim.Adagrad([z], lr=opt_lr)	# LR=0.5+
+        opt = optim.Adagrad([z], lr=opt_lr)	
     elif opt_name == "Adamax":
-        opt = optim.Adamax([z], lr=opt_lr)	# LR=0.5+
+        opt = optim.Adamax([z], lr=opt_lr)	
     elif opt_name == "DiffGrad":
-        opt = DiffGrad([z], lr=opt_lr)	    
+        opt = DiffGrad([z], lr=opt_lr, eps=1e-9, weight_decay=1e-9) # NR: Playing for reasons
     elif opt_name == "AdamP":
         opt = AdamP([z], lr=opt_lr)		    
     elif opt_name == "RAdam":
@@ -704,7 +705,8 @@ def synth(z):
     return clamp_with_grad(model.decode(z_q).add(1).div(2), 0, 1)
 
 
-@torch.no_grad()
+#@torch.no_grad()
+@torch.inference_mode()
 def checkin(i, losses):
     losses_str = ', '.join(f'{loss.item():g}' for loss in losses)
     tqdm.write(f'i: {i}, loss: {sum(losses).item():g}, losses: {losses_str}')
@@ -747,7 +749,8 @@ def train(i):
     loss.backward()
     opt.step()
     
-    with torch.no_grad():
+    #with torch.no_grad():
+    with torch.inference_mode():
         z.copy_(z.maximum(z_min).minimum(z_max))
 
 
@@ -759,8 +762,8 @@ smoother = 0 # Smoother counter
 this_video_frame = 0 # for video styling
 
 # Messing with learning rate / optimisers
-variable_lr = args.step_size
-optimiser_list = [['Adam',0.075],['AdamW',0.125],['Adagrad',0.2],['Adamax',0.125],['DiffGrad',0.075],['RAdam',0.125],['RMSprop',0.02]]
+#variable_lr = args.step_size
+#optimiser_list = [['Adam',0.075],['AdamW',0.125],['Adagrad',0.2],['Adamax',0.125],['DiffGrad',0.075],['RAdam',0.125],['RMSprop',0.02]]
 
 # Do it
 try:
