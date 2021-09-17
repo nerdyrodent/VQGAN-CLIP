@@ -22,6 +22,8 @@ Environment:
   * 10 GB for a 512x512 image
   * 8 GB for a 380x380 image
 
+You may also be interested in [CLIP Guided Diffusion](https://github.com/nerdyrodent/CLIP-Guided-Diffusion)
+
 ## Set up
 
 This example uses [Anaconda](https://www.anaconda.com/products/individual#Downloads) to manage virtual Python environments.
