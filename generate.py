@@ -16,7 +16,7 @@ sys.path.append('taming-transformers')
 
 from omegaconf import OmegaConf
 from taming.models import cond_transformer, vqgan
-#import taming.modules 
+#import taming.modules
 
 import torch
 from torch import nn, optim
@@ -60,7 +60,7 @@ vq_parser.add_argument("-p",    "--prompts", type=str, help="Text prompts", defa
 vq_parser.add_argument("-ip",   "--image_prompts", type=str, help="Image prompts / target image", default=[], dest='image_prompts')
 vq_parser.add_argument("-i",    "--iterations", type=int, help="Number of iterations", default=500, dest='max_iterations')
 vq_parser.add_argument("-se",   "--save_every", type=int, help="Save image iterations", default=50, dest='display_freq')
-vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height) (default: %(default)s)", default=[default_image_size,default_image_size], dest='size')
+vq_parser.add_argument("-s",    "--size", nargs=2, type=int, help="Image size (width height) (default: %(default)s)", default=[1200,800], dest='size')
 vq_parser.add_argument("-ii",   "--init_image", type=str, help="Initial image", default=None, dest='init_image')
 vq_parser.add_argument("-in",   "--init_noise", type=str, help="Initial noise image (pixels or gradient)", default=None, dest='init_noise')
 vq_parser.add_argument("-iw",   "--init_weight", type=float, help="Initial weight", default=0., dest='init_weight')
@@ -109,15 +109,15 @@ if not args.augments:
 if args.prompts:
     # For stories, there will be many phrases
     story_phrases = [phrase.strip() for phrase in args.prompts.split("^")]
-    
+
     # Make a list of all phrases
     all_phrases = []
     for phrase in story_phrases:
         all_phrases.append(phrase.split("|"))
-    
+
     # First phrase
     args.prompts = all_phrases[0]
-    
+
 # Split target images using the pipe character (weights are split later)
 if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
@@ -126,7 +126,7 @@ if args.image_prompts:
 if args.make_video and args.make_zoom_video:
     print("Warning: Make video and make zoom video are mutually exclusive.")
     args.make_video = False
-    
+
 # Make video steps directory
 if args.make_video or args.make_zoom_video:
     if not os.path.exists('steps'):
@@ -185,7 +185,7 @@ def ramp(ratio, width):
 def zoom_at(img, x, y, zoom):
     w, h = img.size
     zoom2 = zoom * 2
-    img = img.crop((x - w / zoom2, y - h / zoom2, 
+    img = img.crop((x - w / zoom2, y - h / zoom2,
                     x + w / zoom2, y + h / zoom2))
     return img.resize((w, h), Image.LANCZOS)
 
@@ -212,7 +212,7 @@ def gradient_3d(width, height, start_list, stop_list, is_horizontal_list):
 
     return result
 
-    
+
 def random_gradient_image(w,h):
     array = gradient_3d(w, h, (0, 0, np.random.randint(0,255)), (np.random.randint(1,255), np.random.randint(2,255), np.random.randint(3,128)), (True, False, False))
     random_image = Image.fromarray(np.uint8(array))
@@ -306,7 +306,7 @@ class MakeCutouts(nn.Module):
         self.cut_size = cut_size
         self.cutn = cutn
         self.cut_pow = cut_pow # not used with pooling
-        
+
         # Pick your own augments & their order
         augment_list = []
         for item in args.augments[0]:
@@ -332,28 +332,28 @@ class MakeCutouts(nn.Module):
                 augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
-                
+
         self.augs = nn.Sequential(*augment_list)
         self.noise_fac = 0.1
         # self.noise_fac = False
 
         # Uncomment if you like seeing the list ;)
         # print(augment_list)
-        
+
         # Pooling
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
 
     def forward(self, input):
         cutouts = []
-        
-        for _ in range(self.cutn):            
+
+        for _ in range(self.cutn):
             # Use Pooling
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
-            
+
         batch = self.augs(torch.cat(cutouts, dim=0))
-        
+
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
@@ -372,9 +372,9 @@ class MakeCutoutsPoolingUpdate(nn.Module):
             K.RandomAffine(degrees=15, translate=0.1, p=0.7, padding_mode='border'),
             K.RandomPerspective(0.7,p=0.7),
             K.ColorJitter(hue=0.1, saturation=0.1, p=0.7),
-            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),            
+            K.RandomErasing((.1, .4), (.3, 1/.3), same_on_batch=True, p=0.7),
         )
-        
+
         self.noise_fac = 0.1
         self.av_pool = nn.AdaptiveAvgPool2d((self.cut_size, self.cut_size))
         self.max_pool = nn.AdaptiveMaxPool2d((self.cut_size, self.cut_size))
@@ -384,13 +384,13 @@ class MakeCutoutsPoolingUpdate(nn.Module):
         max_size = min(sideX, sideY)
         min_size = min(sideX, sideY, self.cut_size)
         cutouts = []
-        
+
         for _ in range(self.cutn):
             cutout = (self.av_pool(input) + self.max_pool(input))/2
             cutouts.append(cutout)
-            
+
         batch = self.augs(torch.cat(cutouts, dim=0))
-        
+
         if self.noise_fac:
             facs = batch.new_empty([self.cutn, 1, 1, 1]).uniform_(0, self.noise_fac)
             batch = batch + facs * torch.randn_like(batch)
@@ -405,7 +405,7 @@ class MakeCutoutsNRUpdate(nn.Module):
         self.cutn = cutn
         self.cut_pow = cut_pow
         self.noise_fac = 0.1
-        
+
         # Pick your own augments & their order
         augment_list = []
         for item in args.augments[0]:
@@ -431,7 +431,7 @@ class MakeCutoutsNRUpdate(nn.Module):
                 augment_list.append(K.RandomErasing(scale=(.1, .4), ratio=(.3, 1/.3), same_on_batch=True, p=0.7))
             elif item == 'Re':
                 augment_list.append(K.RandomResizedCrop(size=(self.cut_size,self.cut_size), scale=(0.1,1),  ratio=(0.75,1.333), cropping_mode='resample', p=0.5))
-                
+
         self.augs = nn.Sequential(*augment_list)
 
 
@@ -565,7 +565,7 @@ elif args.cut_method == 'updated':
 elif args.cut_method == 'nrupdated':
     make_cutouts = MakeCutoutsNRUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)
 else:
-    make_cutouts = MakeCutoutsPoolingUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)    
+    make_cutouts = MakeCutoutsPoolingUpdate(cut_size, args.cutn, cut_pow=args.cut_pow)
 
 toksX, toksY = args.size[0] // f, args.size[1] // f
 sideX, sideY = toksX * f, toksY * f
@@ -593,7 +593,7 @@ if args.init_image:
     pil_tensor = TF.to_tensor(pil_image)
     z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
 elif args.init_noise == 'pixels':
-    img = random_noise_image(args.size[0], args.size[1])    
+    img = random_noise_image(args.size[0], args.size[1])
     pil_image = img.convert('RGB')
     pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
     pil_tensor = TF.to_tensor(pil_image)
@@ -612,7 +612,7 @@ else:
     else:
         z = one_hot @ model.quantize.embedding.weight
 
-    z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2) 
+    z = z.view([-1, toksY, toksX, e_dim]).permute(0, 3, 1, 2)
     #z = torch.rand_like(z)*2						# NR: check
 
 z_orig = z.clone()
@@ -626,7 +626,7 @@ normalize = transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073],
 #normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
 #                                  std=[0.229, 0.224, 0.225])
 
-# CLIP tokenize/encode   
+# CLIP tokenize/encode
 if args.prompts:
     for prompt in args.prompts:
         txt, weight, stop = split_prompt(prompt)
@@ -653,17 +653,17 @@ def get_opt(opt_name, opt_lr):
     if opt_name == "Adam":
         opt = optim.Adam([z], lr=opt_lr)	# LR=0.1 (Default)
     elif opt_name == "AdamW":
-        opt = optim.AdamW([z], lr=opt_lr)	
+        opt = optim.AdamW([z], lr=opt_lr)
     elif opt_name == "Adagrad":
-        opt = optim.Adagrad([z], lr=opt_lr)	
+        opt = optim.Adagrad([z], lr=opt_lr)
     elif opt_name == "Adamax":
-        opt = optim.Adamax([z], lr=opt_lr)	
+        opt = optim.Adamax([z], lr=opt_lr)
     elif opt_name == "DiffGrad":
         opt = DiffGrad([z], lr=opt_lr, eps=1e-9, weight_decay=1e-9) # NR: Playing for reasons
     elif opt_name == "AdamP":
-        opt = AdamP([z], lr=opt_lr)		    
+        opt = AdamP([z], lr=opt_lr)
     elif opt_name == "RAdam":
-        opt = RAdam([z], lr=opt_lr)		    
+        opt = RAdam([z], lr=opt_lr)
     elif opt_name == "RMSprop":
         opt = optim.RMSprop([z], lr=opt_lr)
     else:
@@ -679,19 +679,19 @@ print('Using device:', device)
 print('Optimising using:', args.optimiser)
 
 if args.prompts:
-    print('Using text prompts:', args.prompts)  
+    print('Using text prompts:', args.prompts)
 if args.image_prompts:
     print('Using image prompts:', args.image_prompts)
 if args.init_image:
     print('Using initial image:', args.init_image)
 if args.noise_prompt_weights:
-    print('Noise prompt weights:', args.noise_prompt_weights)    
+    print('Noise prompt weights:', args.noise_prompt_weights)
 
 
 if args.seed is None:
     seed = torch.seed()
 else:
-    seed = args.seed  
+    seed = args.seed
 torch.manual_seed(seed)
 print('Using seed:', seed)
 
@@ -713,14 +713,14 @@ def checkin(i, losses):
     out = synth(z)
     info = PngImagePlugin.PngInfo()
     info.add_text('comment', f'{args.prompts}')
-    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info) 	
+    TF.to_pil_image(out[0].cpu()).save(args.output, pnginfo=info)
 
 
 def ascend_txt():
     global i
     out = synth(z)
     iii = perceptor.encode_image(normalize(make_cutouts(out))).float()
-    
+
     result = []
 
     if args.init_weight:
@@ -729,8 +729,8 @@ def ascend_txt():
 
     for prompt in pMs:
         result.append(prompt(iii))
-    
-    if args.make_video:    
+
+    if args.make_video:
         img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
         img = np.transpose(img, (1, 2, 0))
         imageio.imwrite('./steps/' + str(i) + '.png', np.array(img))
@@ -741,14 +741,14 @@ def ascend_txt():
 def train(i):
     opt.zero_grad(set_to_none=True)
     lossAll = ascend_txt()
-    
+
     if i % args.display_freq == 0:
         checkin(i, lossAll)
-       
+
     loss = sum(lossAll)
     loss.backward()
     opt.step()
-    
+
     #with torch.no_grad():
     with torch.inference_mode():
         z.copy_(z.maximum(z_min).minimum(z_max))
@@ -768,39 +768,39 @@ this_video_frame = 0 # for video styling
 # Do it
 try:
     with tqdm() as pbar:
-        while True:            
+        while True:
             # Change generated image
             if args.make_zoom_video:
                 if i % args.zoom_frequency == 0:
                     out = synth(z)
-                    
+
                     # Save image
                     img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
                     img = np.transpose(img, (1, 2, 0))
                     imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
 
-                    # Time to start zooming?                    
+                    # Time to start zooming?
                     if args.zoom_start <= i:
-                        # Convert z back into a Pil image                    
+                        # Convert z back into a Pil image
                         #pil_image = TF.to_pil_image(out[0].cpu())
-                        
+
                         # Convert NP to Pil image
                         pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
-                                                
+
                         # Zoom
                         if args.zoom_scale != 1:
                             pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, args.zoom_scale)
                         else:
                             pil_image_zoom = pil_image
-                        
+
                         # Shift - https://pillow.readthedocs.io/en/latest/reference/ImageChops.html
                         if args.zoom_shift_x or args.zoom_shift_y:
                             # This one wraps the image
                             pil_image_zoom = ImageChops.offset(pil_image_zoom, args.zoom_shift_x, args.zoom_shift_y)
-                        
+
                         # Convert image back to a tensor again
                         pil_tensor = TF.to_tensor(pil_image_zoom)
-                        
+
                         # Re-encode
                         z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
                         z_orig = z.clone()
@@ -808,65 +808,65 @@ try:
 
                         # Re-create optimiser
                         opt = get_opt(args.optimiser, args.step_size)
-                    
+
                     # Next
                     j += 1
-            
+
             # Change text prompt
             if args.prompt_frequency > 0:
                 if i % args.prompt_frequency == 0 and i > 0:
                     # In case there aren't enough phrases, just loop
                     if p >= len(all_phrases):
                         p = 0
-                    
+
                     pMs = []
                     args.prompts = all_phrases[p]
 
-                    # Show user we're changing prompt                                
+                    # Show user we're changing prompt
                     print(args.prompts)
-                    
+
                     for prompt in args.prompts:
                         txt, weight, stop = split_prompt(prompt)
                         embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
                         pMs.append(Prompt(embed, weight, stop).to(device))
-                                        
+
                     '''
                     # Smooth test
                     smoother = args.zoom_frequency * 15 # smoothing over x frames
                     variable_lr = args.step_size * 0.25
                     opt = get_opt(args.optimiser, variable_lr)
                     '''
-                    
+
                     p += 1
-            
+
             '''
             if smoother > 0:
                 if smoother == 1:
                     opt = get_opt(args.optimiser, args.step_size)
                 smoother -= 1
             '''
-            
+
             '''
             # Messing with learning rate / optimisers
             if i % 225 == 0 and i > 0:
                 variable_optimiser_item = random.choice(optimiser_list)
                 variable_optimiser = variable_optimiser_item[0]
                 variable_lr = variable_optimiser_item[1]
-                
+
                 opt = get_opt(variable_optimiser, variable_lr)
-                print("New opt: %s, lr= %f" %(variable_optimiser,variable_lr)) 
+                print("New opt: %s, lr= %f" %(variable_optimiser,variable_lr))
             '''
-            
+
 
             # Training time
             train(i)
-            
+
             # Ready to stop yet?
             if i == args.max_iterations:
                 if not args.video_style_dir:
                     # we're done
                     break
-                else:                    
+                else:
                     if this_video_frame == (num_video_frames - 1):
                         # we're done
                         make_styled_video = True
@@ -878,7 +878,7 @@ try:
                         # Reset the iteration count
                         i = -1
                         pbar.reset()
-                                                
+
                         # Load the next frame, reset a few options - same filename, different directory
                         args.init_image = video_frame_list[this_video_frame]
                         print("Next frame: ", args.init_image)
@@ -886,7 +886,7 @@ try:
                         if args.seed is None:
                             seed = torch.seed()
                         else:
-                            seed = args.seed  
+                            seed = args.seed
                         torch.manual_seed(seed)
                         print("Seed: ", seed)
 
@@ -898,7 +898,7 @@ try:
                         pil_image = img.convert('RGB')
                         pil_image = pil_image.resize((sideX, sideY), Image.LANCZOS)
                         pil_tensor = TF.to_tensor(pil_image)
-                        
+
                         # Re-encode
                         z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
                         z_orig = z.clone()
@@ -936,7 +936,7 @@ if args.make_video or args.make_zoom_video:
         keep = temp.copy()
         frames.append(keep)
         temp.close()
-    
+
     if args.output_video_fps > 9:
         # Hardware encoding and video frame interpolation
         print("Creating interpolated frames...")
@@ -947,7 +947,7 @@ if args.make_video or args.make_zoom_video:
                        '-y',
                        '-f', 'image2pipe',
                        '-vcodec', 'png',
-                       '-r', str(args.input_video_fps),               
+                       '-r', str(args.input_video_fps),
                        '-i',
                        '-',
                        '-b:v', '10M',
@@ -983,8 +983,8 @@ if args.make_video or args.make_zoom_video:
                        '-metadata', f'comment={args.prompts}',
                        output_file], stdin=PIPE)
         except FileNotFoundError:
-            print("ffmpeg command failed - check your installation")        
+            print("ffmpeg command failed - check your installation")
         for im in tqdm(frames):
             im.save(p.stdin, 'PNG')
         p.stdin.close()
-        p.wait()     
+        p.wait()
