@@ -19,6 +19,7 @@ from taming.models import cond_transformer, vqgan
 #import taming.modules
 
 import torch
+torch.cuda.empty_cache()
 from torch import nn, optim
 from torch.nn import functional as F
 from torchvision import transforms

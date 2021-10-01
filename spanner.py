@@ -26,7 +26,7 @@ for subdir, dirs, files in os.walk(root_dir):
       city = subdir.split("/")[-1]
       try:
         path = os.path.join(subdir, file)
-        command_str = "python generate.py -p 'an illustration of colorful " + city +" on a sunny day' -o " + outpath + " -ii " + path + " -i 100"
+        command_str = "python generate.py -p 'an illustration of colorful " + city +" on a sunny day' -o '" + outpath + "' -ii '" + path + "' -i 100"
         print(command_str)
         subprocess.call(command_str, shell=True)
       except Exception as e:
