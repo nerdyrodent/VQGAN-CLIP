@@ -74,7 +74,7 @@ vq_parser.add_argument("-lr",   "--learning_rate", type=float, help="Learning ra
 vq_parser.add_argument("-cutm", "--cut_method", type=str, help="Cut method", choices=['original','updated','nrupdated','updatedpooling','latest'], default='latest', dest='cut_method')
 vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", default=32, dest='cutn')
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
-vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
+vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=100000, dest='seed')
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam','RMSprop'], default='Adam', dest='optimiser')
 vq_parser.add_argument("-o",    "--output", type=str, help="Output filename", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
