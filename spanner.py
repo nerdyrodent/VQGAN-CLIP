@@ -13,7 +13,7 @@ print ("2nd call#######")
 cities = []
 
 def run_spanner(city_name):
-  root_dir = "./bing/dataset_resized_pixelated"
+  root_dir = "./bing/dataset_resized"
   for subdir, dirs, files in os.walk(root_dir):
     for file in files:
       path = os.path.join(subdir, file)
@@ -31,7 +31,7 @@ def run_spanner(city_name):
             city = subdir.split("/")[-1]
             try:
               path = os.path.join(subdir, file)
-              command_str = "python3 generate.py -p 'an illustration of colorful " + city +" on a sunny day' -o '" + outpath + "' -ii '" + path + "' -i 100"
+              command_str = "python3 generate.py -p 'an illustration of colorful " + city +" on a sunny day' -o '" + outpath + "' -ii '" + path + "' -i 50"
               print(command_str)
               subprocess.call(command_str, shell=True)
             except Exception as e:
