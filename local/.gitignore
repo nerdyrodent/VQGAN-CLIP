@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+
+# Libraries and Models
+CLIP/
+taming-transformers/
+taming/
+checkpoints/
+
+# Editor
+.vscode/
+
+# Operations
+outputs/
+steps/
+
+# Files
+output.png
+steps.mp4
