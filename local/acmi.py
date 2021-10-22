@@ -71,9 +71,18 @@ if work['title']:
         clean(work['title'])
     )
 if work['brief_description']:
-    work_metadata_strings.append(
-        clean(work['brief_description'])
-    )
+    clean_brief_description = clean(work['brief_description'])
+    # Split it into groups of seven words
+    space_separated_list = clean_brief_description.split()
+    NUMBER_OF_WORDS = 7
+    seven_word_groups = [
+        ' '.join(space_separated_list[x:x+NUMBER_OF_WORDS]) for x in range(
+            0,
+            len(space_separated_list),
+            NUMBER_OF_WORDS,
+        )
+    ]
+    work_metadata_strings += seven_word_groups
 
 # Join our metadata together with the '|' symbol for this Notebook
 ACMI_METADATA = '|'.join(work_metadata_strings)
