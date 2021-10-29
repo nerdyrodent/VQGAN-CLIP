@@ -284,7 +284,7 @@ For example:
 
 `RuntimeError: cusolver error: CUSOLVER_STATUS_INTERNAL_ERROR, when calling cusolverDnCreate(handle)`
 
-Make sure you have specified the correct size for the image. For more information please refer to [#6](/issues/6)
+Make sure you have specified the correct size for the image.
 
 ### RuntimeError: CUDA out of memory
 
