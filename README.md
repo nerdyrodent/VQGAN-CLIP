@@ -177,6 +177,7 @@ To use `zoom.sh`, specifying a text prompt, output filename and number of frames
 ```sh
 ./zoom.sh "A painting of a red telephone box spinning through a time vortex" Telephone.png 150
 ```
+If you don't have ImageMagick installed, you can install it with ```sudo apt install imagemagick```
 
 <img src="./samples/zoom.gif" width="256px"></img>
 
@@ -184,7 +185,6 @@ There is also a simple zoom video creation option available. For example:
 ```sh
 python generate.py -p "The inside of a sphere" -zvid -i 4500 -zse 20 -vl 10 -zsc 0.97 -opt Adagrad -lr 0.15 -se 4500
 ```
-If you don't have ImageMagick installed, you can install it with ```sudo apt install imagemagick```
 
 ## Random text example
 
