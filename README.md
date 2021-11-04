@@ -49,6 +49,8 @@ Install other required Python packages:
 pip install ftfy regex tqdm omegaconf pytorch-lightning IPython kornia imageio imageio-ffmpeg einops torch_optimizer
 ```
 
+Or use the ```requirements.txt``` file, which includes version numbers.
+
 Clone required repositories:
 
 ```sh
