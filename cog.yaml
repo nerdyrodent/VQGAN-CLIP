@@ -1,0 +1,26 @@
+build:
+  gpu: true
+  cuda: 11.0
+  python_version: "3.8"
+  system_packages:
+    - "libgl1-mesa-glx"
+    - "libglib2.0-0"
+  python_packages:
+    - "torchvision==0.10.0"
+    - "torch==1.9.0"
+    - "torchaudio==0.9.0"
+    - "numpy==1.19.4"
+    - "tqdm==4.62.2"
+    - "Pillow==8.3.2"
+    - "einops==0.3.2"
+    - "ftfy==6.0.3"
+    - "regex==2021.10.8"
+    - "imageio==2.10.3"
+    - "ipython==7.21.0"
+    - "torch-optimizer==0.3.0"
+    - "imageio-ffmpeg==0.4.5"
+    - "kornia==0.6.1"
+    - "pytorch-lightning==1.5.0"
+    - "omegaconf==2.1.1"
+
+predict: "predict.py:Predictor"
