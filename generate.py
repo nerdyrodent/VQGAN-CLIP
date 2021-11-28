@@ -544,7 +544,7 @@ def resize_image(image, out_size):
 # Do it
 device = torch.device(args.cuda_device)
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
-jit = True if float(torch.__version__[:3]) < 1.8 else False
+jit = True if "1.7.1" in torch.__version__ else False
 perceptor = clip.load(args.clip_model, jit=jit)[0].eval().requires_grad_(False).to(device)
 
 # clock=deepcopy(perceptor.visual.positional_embedding.data)
