@@ -27,7 +27,7 @@ from torch.cuda import get_device_properties
 torch.backends.cudnn.benchmark = False		# NR: True is a bit faster, but can lead to OOM. False is more deterministic.
 #torch.use_deterministic_algorithms(True)	# NR: grid_sampler_2d_backward_cuda does not have a deterministic implementation
 
-from torch_optimizer import DiffGrad, AdamP, RAdam
+from torch_optimizer import DiffGrad, AdamP
 
 from CLIP import clip
 import kornia.augmentation as K
@@ -50,7 +50,7 @@ default_image_size = 512  # >8GB VRAM
 if not torch.cuda.is_available():
     default_image_size = 256  # no GPU found
 elif get_device_properties(0).total_memory <= 2 ** 33:  # 2 ** 33 = 8,589,934,592 bytes = 8 GB
-    default_image_size = 318  # <8GB VRAM
+    default_image_size = 304  # <8GB VRAM
 
 # Create the parser
 vq_parser = argparse.ArgumentParser(description='Image generation using VQGAN+CLIP')
@@ -75,7 +75,7 @@ vq_parser.add_argument("-cuts", "--num_cuts", type=int, help="Number of cuts", d
 vq_parser.add_argument("-cutp", "--cut_power", type=float, help="Cut power", default=1., dest='cut_pow')
 vq_parser.add_argument("-sd",   "--seed", type=int, help="Seed", default=None, dest='seed')
 vq_parser.add_argument("-opt",  "--optimiser", type=str, help="Optimiser", choices=['Adam','AdamW','Adagrad','Adamax','DiffGrad','AdamP','RAdam','RMSprop'], default='Adam', dest='optimiser')
-vq_parser.add_argument("-o",    "--output", type=str, help="Output filename", default="output.png", dest='output')
+vq_parser.add_argument("-o",    "--output", type=str, help="Output image filename", default="output.png", dest='output')
 vq_parser.add_argument("-vid",  "--video", action='store_true', help="Create video frames?", dest='make_video')
 vq_parser.add_argument("-zvid", "--zoom_video", action='store_true', help="Create zoom video?", dest='make_zoom_video')
 vq_parser.add_argument("-zs",   "--zoom_start", type=int, help="Zoom start iteration", default=0, dest='zoom_start')
@@ -663,7 +663,7 @@ def get_opt(opt_name, opt_lr):
     elif opt_name == "AdamP":
         opt = AdamP([z], lr=opt_lr)		    
     elif opt_name == "RAdam":
-        opt = RAdam([z], lr=opt_lr)		    
+        opt = optim.RAdam([z], lr=opt_lr)		    
     elif opt_name == "RMSprop":
         opt = optim.RMSprop([z], lr=opt_lr)
     else:
