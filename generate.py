@@ -93,7 +93,7 @@ vq_parser.add_argument("-vsd",  "--video_style_dir", type=str, help="Directory w
 vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to use", default="cuda:0", dest='cuda_device')
 
 # Timeline
-vq_parser.add_argument("-tf",    "--timeline_file", type=str, help="File with timeline", default=None, dest='timeline_file')
+vq_parser.add_argument("-tf",    "--timeline_file", type=str, help="File with timeline data", default=None, dest='timeline_file')
 
 
 
