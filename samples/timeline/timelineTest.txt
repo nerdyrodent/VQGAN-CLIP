@@ -1,0 +1,9 @@
+prompt="blue", zoom=1.1, frames=5
+zoom=0.9, 
+prompt="red", zoom=1.1, 
+zoom=0.9, 
+prompt="green", zoom=1.1, 
+zoom=0.9, 
+prompt="purple", zoom=1.1, 
+zoom=0.9, 
+zoom=1.1,

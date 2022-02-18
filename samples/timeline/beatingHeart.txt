@@ -1,0 +1,10 @@
+prompt="Cartoon Red Heart on a Black background", zoom=1.1, frames=5
+zoom=0.95, 
+zoom=1.05, 
+zoom=0.95, 
+zoom=1.05,
+zoom=0.95,
+zoom=1.05,
+zoom=0.95, 
+zoom=1.05, 
+zoom=0.95, 

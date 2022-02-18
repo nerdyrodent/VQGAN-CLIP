@@ -171,6 +171,28 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 
 A video style transfer effect can be achived by specifying a directory of video frames in `video_style_dir`. Output will be saved in the steps directory, using the original video frame filenames. You can also use this as a sort of "batch mode" if you have a directory of images you want to apply a style to. This can also be combined with Story Mode if you don't wish to apply the same style to every images, but instead roll through a list of styles.
 
+## Timeline
+
+The Timeline tool can be used to create videos where the prompt and othere settings change through out the duration of the video.
+
+```sh
+python generate.py -tf "samples/timeline/sun.txt"
+```
+
+<img src="./samples/timeline/timeline.gif" width="256px"></img>
+
+```sh
+# [sun.txt] Example of a Timeline file.
+prompt="Blue", frames=1, iterations=25,
+prompt="Painting of a One Sun in the Sky", frames=30, iterations=20,
+prompt="Painting of the Sun setting over a mountain", frames=40, iterations=10, zoom=1.03,
+prompt="Painting of Stars in the sky at night", frames=15, iterations=4, zoom=0.95,
+prompt="Painting of Stars in the sky at night", frames=30, iterations=20, zoom=0.97,
+prompt="Painting of driving down a road at night", frames=40, iterations=20, zoom=1.05,
+```
+
+
+
 ## Feedback example
 
 By feeding back the generated images and making slight changes, some interesting effects can be created.
