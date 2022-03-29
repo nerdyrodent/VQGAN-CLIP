@@ -171,6 +171,86 @@ python generate.py -p "A painting in the style of Picasso" -ii samples/VanGogh.j
 
 A video style transfer effect can be achived by specifying a directory of video frames in `video_style_dir`. Output will be saved in the steps directory, using the original video frame filenames. You can also use this as a sort of "batch mode" if you have a directory of images you want to apply a style to. This can also be combined with Story Mode if you don't wish to apply the same style to every images, but instead roll through a list of styles.
 
+
+## Timeline
+
+The Timeline tool can be used to create videos where the prompt and othere settings change through out the duration of the video.
+
+```sh
+python generate.py -tf "samples/timeline/sun.txt"
+```
+
+<img src="./samples/timeline/timeline.gif" width="256px"></img>
+
+```py
+# [sun.txt] Example of a Timeline file. (This line is not needed for the actual file.)
+prompt="Blue", frames=1, iterations=25,
+prompt="Painting of a One Sun in the Sky", frames=30, iterations=20,
+prompt="Painting of the Sun setting over a mountain", frames=40, iterations=10, zoom=1.03,
+prompt="Painting of Stars in the sky at night", frames=15, iterations=4, zoom=0.95,
+prompt="Painting of Stars in the sky at night", frames=30, iterations=20, zoom=0.97,
+prompt="Painting of driving down a road at night", frames=40, iterations=20, zoom=1.05,
+```
+
+### Timeline Keywords
+```
+Timeline Keywords:
+
+  prompt=(String)
+    Change the prompt.
+    Default value: "Blue Duck"
+
+  frames=(int)
+    Number of frames for each line.
+    Default value: 10
+
+  iterations=(int)
+    The number of iterations of training for each frame. (Lowering the number of iterations when changing prompts can add a more visible transition.)
+    Default value: 10
+
+  zoom=(float)
+    How much to zoom per frame. =1 dont zoom, >1 zoom in, <1 zoom out.
+    Default value: 1.0
+
+  xshift=(int) / yshift=(int)
+    How much to shift the image per frame in the X (left/right) or Y (up/down). Amount in pixels.
+    Default value: 0
+
+  # at the start of a line comments it out.
+
+```
+
+### Timeline Tutorial/Rules
+
+When a setting is changed that setting continues for each line (Including blank line) until it is either changed back to the prevouis or changed to a new value.
+
+Example:
+```py
+prompt="blue", zoom=1.1, frames=5
+zoom=0.9, 
+prompt="red", zoom=1.1, 
+zoom=0.9, 
+
+prompt="green", zoom=1, frames=10
+```
+1. In the first line, the `prompt`, `zoom` and `frames` are given a value.
+Since `Iterations` and `xshift/yshift` are not set to any value, they are their default values.
+Since `frames` is set to `5` each line will creat 5 frames. After 5 frames the next line will run.
+ 
+2. The second line will also create 5 frames. The only change will be the `zoom` value. All the other settings will stay the same. The `prompt` is still `blue` and the number of `frames` is still `5`.
+ 
+3. On the third line the `prompt` is changed to `red` and the `zoom` is adjusted again. Since the number of `frames` has not been changed it continues with creating 5 frames for this line.
+ 
+4. Similarly to line 2, the only change is the `zoom`. But unlike line 2, the `prompt` is `red` since `red` was the last value that `prompt` was set to.
+ 
+5. The fith line is blank. Since it changes no settings it runs exactly like line 4 did.
+ 
+6. The sixth line changes `prompt`, `zoom` and `frames`. The `zoom` effect stops since it was set to `1`. The `prompt` is changed to `green`. And finally since the `frames` have been set to `10`, unlike the previous lines, line 6 creates 10 frames.
+ 
+* Once all lines have been run the program then takes the images that have been created and saved to the `steps` file and turns them into a video.
+ 
+Most all the arguments for `generate.py` work while using the Timeline tool. The only arguments that don't work are those that have an equivalent setting in the Timeline tool.
+
 ## Feedback example
 
 By feeding back the generated images and making slight changes, some interesting effects can be created.
@@ -215,7 +295,7 @@ usage: generate.py [-h] [-p PROMPTS] [-ip IMAGE_PROMPTS] [-i MAX_ITERATIONS] [-s
 [-zs ZOOM_START] [-zse ZOOM_FREQUENCY] [-zsc ZOOM_SCALE] [-cpe PROMPT_FREQUENCY]
 [-vl VIDEO_LENGTH] [-ofps OUTPUT_VIDEO_FPS] [-ifps INPUT_VIDEO_FPS] [-d]
 [-aug {Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} [{Ji,Sh,Gn,Pe,Ro,Af,Et,Ts,Cr,Er,Re} ...]]
-[-cd CUDA_DEVICE]
+[-cd CUDA_DEVICE] [-tf TIMELINE_FILE]
 ```
 
 ```sh
@@ -280,6 +360,8 @@ optional arguments:
                         Enabled augments
   -cd CUDA_DEVICE, --cuda_device CUDA_DEVICE
                         Cuda device to use
+  -tf TIMELINE_FILE, --timeline_file TIMELINE_FILE
+                        File with timeline data
 ```
 
 ## Troubleshooting

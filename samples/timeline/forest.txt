@@ -1,0 +1,4 @@
+prompt="forest in the day", frames=1, iterations=100,
+prompt="forest in the day", frames=15, iterations=10,
+frames=10, iterations=2, zoom=0.95,
+prompt="Bedroom Window out to a forest", frames=10, iterations=10, zoom=1,

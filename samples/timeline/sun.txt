@@ -1,0 +1,6 @@
+prompt="Blue", frames=1, iterations=25,
+prompt="Painting of a One Sun in the Sky", frames=30, iterations=20,
+prompt="Painting of the Sun setting over a mountain", frames=40, iterations=10, zoom=1.03,
+prompt="Painting of Stars in the sky at night", frames=15, iterations=4, zoom=0.95,
+prompt="Painting of Stars in the sky at night", frames=30, iterations=20, zoom=0.97,
+prompt="Painting of driving down a road at night", frames=40, iterations=20, zoom=1.05,
