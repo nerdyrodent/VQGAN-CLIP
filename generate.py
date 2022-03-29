@@ -855,7 +855,7 @@ this_video_frame = 0 # for video styling
 
 timeline_point = 0 # The current point on the timeline
 timeline_frame = 0 # Frames since last point of the timeline
-timeline_frame_i = 0 # Iterations towards current frame
+timeline_frame_i = 1 # Iterations towards current frame
 
 # Messing with learning rate / optimisers
 #variable_lr = args.step_size
@@ -880,6 +880,8 @@ try:
                     while timeline_frame < timeline.frames[timeline_point]:
                 '''
             
+                train(i)
+
                 if timeline_frame_i >= timeline.iterations[timeline_point]:
                     out = synth(z)
                     
@@ -887,49 +889,50 @@ try:
                     img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
                     img = np.transpose(img, (1, 2, 0))
                     imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
-                        
-                    # Convert NP to Pil image
-                    pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
-                                                
-                    # Zoom
-                    if timeline.zoom[timeline_point] != 1:
-                        pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, timeline.zoom[timeline_point])
-                    else:
-                        pil_image_zoom = pil_image
+                    
+                    # Dont want to Re-encode or Re-create optimiser if we dont have to.
+                    if timeline.zoom[timeline_point] != 1 or timeline.zoom_shift_x[timeline_point] != 0 or timeline.zoom_shift_y[timeline_point] != 0:
+                        # Convert NP to Pil image
+                        pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
+
+                        # Zoom
+                        if timeline.zoom[timeline_point] != 1:
+                            pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, timeline.zoom[timeline_point])
+                        else:
+                            pil_image_zoom = pil_image
 
 
-                    ### Shift - https://pillow.readthedocs.io/en/latest/reference/ImageChops.html
-                    if timeline.zoom_shift_x[timeline_point] != 0 or timeline.zoom_shift_y[timeline_point] != 0:
-                        ## This one wraps the image
-                        pil_image_zoom = ImageChops.offset(pil_image_zoom, timeline.zoom_shift_x[timeline_point], timeline.zoom_shift_y[timeline_point])
+                        ### Shift - https://pillow.readthedocs.io/en/latest/reference/ImageChops.html
+                        if timeline.zoom_shift_x[timeline_point] != 0 or timeline.zoom_shift_y[timeline_point] != 0:
+                            ## This one wraps the image
+                            pil_image_zoom = ImageChops.offset(pil_image_zoom, timeline.zoom_shift_x[timeline_point], timeline.zoom_shift_y[timeline_point])
                     
                     
-                    # Convert image back to a tensor again
-                    pil_tensor = TF.to_tensor(pil_image_zoom)
+                        # Convert image back to a tensor again
+                        pil_tensor = TF.to_tensor(pil_image_zoom)
                         
-                    # Re-encode
-                    z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
-                    z_orig = z.clone()
-                    z.requires_grad_(True)
+                        # Re-encode
+                        z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+                        z_orig = z.clone()
+                        z.requires_grad_(True)
 
-                    # Re-create optimiser
-                    opt = get_opt(args.optimiser, args.step_size)
+                        # Re-create optimiser
+                        opt = get_opt(args.optimiser, args.step_size)
 
                     # Frames since last point of the timeline
                     timeline_frame += 1
-                    timeline_frame_i = 0
+                    timeline_frame_i = 1
 
                     # Next
                     j += 1
                 else:
                     timeline_frame_i += 1
 
-                train(i)
+
 
                 if timeline_frame >= timeline.frames[timeline_point]:
                     # End
                     if timeline_point + 1 == len(timeline.frames):
-                        #timelinePoint = 0   use this to loop instead of end
                         # we're done
                         break
                     else:
