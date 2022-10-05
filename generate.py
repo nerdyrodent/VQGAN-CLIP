@@ -92,11 +92,15 @@ vq_parser.add_argument("-aug",  "--augments", nargs='+', action='append', type=s
 vq_parser.add_argument("-vsd",  "--video_style_dir", type=str, help="Directory with video frames to style", default=None, dest='video_style_dir')
 vq_parser.add_argument("-cd",   "--cuda_device", type=str, help="Cuda device to use", default="cuda:0", dest='cuda_device')
 
+# Timeline
+vq_parser.add_argument("-tf",    "--timeline_file", type=str, help="File with timeline data", default=None, dest='timeline_file')
+
+
 
 # Execute the parse_args() method
 args = vq_parser.parse_args()
 
-if not args.prompts and not args.image_prompts:
+if not args.prompts and not args.image_prompts and not args.timeline_file:
     args.prompts = "A cute, smiling, Nerdy Rodent"
 
 if args.cudnn_determinism:
@@ -123,12 +127,16 @@ if args.image_prompts:
     args.image_prompts = args.image_prompts.split("|")
     args.image_prompts = [image.strip() for image in args.image_prompts]
 
+if args.timeline_file and (args.make_video or args.make_zoom_video):
+    print("Warning: Timeline File, Make video and make zoom video are mutually exclusive.")
+    args.make_video = False
+    args.make_zoom_video = False
 if args.make_video and args.make_zoom_video:
     print("Warning: Make video and make zoom video are mutually exclusive.")
     args.make_video = False
     
 # Make video steps directory
-if args.make_video or args.make_zoom_video:
+if args.make_video or args.make_zoom_video or args.timeline_file:
     if not os.path.exists('steps'):
         os.mkdir('steps')
 
@@ -541,6 +549,82 @@ def resize_image(image, out_size):
     return image.resize(size, Image.LANCZOS)
 
 
+# All the data from the timeline file is read into this class
+class TimelineData:
+    prompt = []
+    frames = []
+    zoom = []
+    iterations = []
+    zoom_shift_x = []
+    zoom_shift_y = []
+
+# Takes in a path to a timeline file and outputs a instance of the (TimelineData) class
+def read_timeline_file(path):
+
+    timelineData = TimelineData()
+
+    # set the default values
+    temp_prompt = "Blue Duck"
+    temp_frames = 10
+    temp_zoom = 1
+    temp_iterations = 10
+    temp_shift_x = 0
+    temp_shift_y = 0
+
+    # Opens the timeline file
+    with open(path, 'r') as file:
+        timeline_file_lines = [line.strip() for line in file]
+    
+    for line in timeline_file_lines:
+        # Skip if a line starts with the symbol "#", can be used to comment things out.
+        if line.startswith("#"):
+            continue
+
+        line = line.casefold().split(",")
+
+        for part in line:
+            part = part.strip()
+            
+            if part.startswith("prompt="):
+                temp_prompt = part[7:].replace("\"", "").replace("\'", "")
+                continue
+            if part.startswith("frames="):
+                temp_frames = int(part[7:])
+                continue
+            if part.startswith("iterations="):
+                temp_iterations = int(part[11:])
+                continue
+            if part.startswith("zoom="):
+                temp_zoom = float(part[5:])
+                continue
+            if part.startswith("xshift="):
+                temp_shift_x = int(part[7:])
+                continue
+            if part.startswith("yshift="):
+                temp_shift_y = int(part[7:])
+                continue
+
+        
+        # Skips the line since the settings make the line useless
+        if temp_frames <= 0 or temp_iterations <= 0:
+            print("Warning: Timeline: (frames=, iterations=) cant be set as non positive integers: ", line)
+            continue
+
+        timelineData.prompt.append(temp_prompt)
+        timelineData.frames.append(temp_frames)
+        timelineData.zoom.append(temp_zoom)
+        timelineData.iterations.append(temp_iterations)
+        timelineData.zoom_shift_x.append(temp_shift_x)
+        timelineData.zoom_shift_y.append(temp_shift_y)
+
+    return timelineData
+
+# Read Timeline File
+if args.timeline_file:
+    timeline = read_timeline_file(args.timeline_file)
+
+
+
 # Do it
 device = torch.device(args.cuda_device)
 model = load_vqgan_model(args.vqgan_config, args.vqgan_checkpoint).to(device)
@@ -633,6 +717,11 @@ if args.prompts:
         embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
         pMs.append(Prompt(embed, weight, stop).to(device))
 
+if args.timeline_file:
+    txt, weight, stop = split_prompt(timeline.prompt[0])
+    embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+    pMs.append(Prompt(embed, weight, stop).to(device))
+
 for prompt in args.image_prompts:
     path, weight, stop = split_prompt(prompt)
     img = Image.open(path)
@@ -679,7 +768,9 @@ print('Using device:', device)
 print('Optimising using:', args.optimiser)
 
 if args.prompts:
-    print('Using text prompts:', args.prompts)  
+    print('Using text prompts:', args.prompts)
+if args.timeline_file:
+    print('Using timeline prompts:', timeline.prompt)  
 if args.image_prompts:
     print('Using image prompts:', args.image_prompts)
 if args.init_image:
@@ -742,7 +833,8 @@ def train(i):
     opt.zero_grad(set_to_none=True)
     lossAll = ascend_txt()
     
-    if i % args.display_freq == 0:
+    # No longer runs when using the Timeline, This was consistently causing "CUDA out of memory" Errors. Not sure why.
+    if i % args.display_freq == 0 and not args.timeline_file:
         checkin(i, lossAll)
        
     loss = sum(lossAll)
@@ -756,10 +848,14 @@ def train(i):
 
 
 i = 0 # Iteration counter
-j = 0 # Zoom video frame counter
+j = 0 # Zoom / Timeline video frame counter
 p = 1 # Phrase counter
 smoother = 0 # Smoother counter
 this_video_frame = 0 # for video styling
+
+timeline_point = 0 # The current point on the timeline
+timeline_frame = 0 # Frames since last point of the timeline
+timeline_frame_i = 1 # Iterations towards current frame
 
 # Messing with learning rate / optimisers
 #variable_lr = args.step_size
@@ -769,6 +865,102 @@ this_video_frame = 0 # for video styling
 try:
     with tqdm() as pbar:
         while True:            
+
+            # Runs the timeline tool, and skips the rest of the code in this loop.
+            if args.timeline_file:
+                
+                ''' Working on a zoom feature that keeps the image static as it zooms in or out.
+                if timeline.iterations[timeline_point] == 0:
+                    out = synth(z)
+                    # Save image
+                    img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+                    img = np.transpose(img, (1, 2, 0))
+                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
+
+                    while timeline_frame < timeline.frames[timeline_point]:
+                '''
+            
+                train(i)
+
+                if timeline_frame_i >= timeline.iterations[timeline_point]:
+                    out = synth(z)
+                    
+                    # Save image
+                    img = np.array(out.mul(255).clamp(0, 255)[0].cpu().detach().numpy().astype(np.uint8))[:,:,:]
+                    img = np.transpose(img, (1, 2, 0))
+                    imageio.imwrite('./steps/' + str(j) + '.png', np.array(img))
+                    
+                    # Dont want to Re-encode or Re-create optimiser if we dont have to.
+                    if timeline.zoom[timeline_point] != 1 or timeline.zoom_shift_x[timeline_point] != 0 or timeline.zoom_shift_y[timeline_point] != 0:
+                        # Convert NP to Pil image
+                        pil_image = Image.fromarray(np.array(img).astype('uint8'), 'RGB')
+
+                        # Zoom
+                        if timeline.zoom[timeline_point] != 1:
+                            pil_image_zoom = zoom_at(pil_image, sideX/2, sideY/2, timeline.zoom[timeline_point])
+                        else:
+                            pil_image_zoom = pil_image
+
+
+                        ### Shift - https://pillow.readthedocs.io/en/latest/reference/ImageChops.html
+                        if timeline.zoom_shift_x[timeline_point] != 0 or timeline.zoom_shift_y[timeline_point] != 0:
+                            ## This one wraps the image
+                            pil_image_zoom = ImageChops.offset(pil_image_zoom, timeline.zoom_shift_x[timeline_point], timeline.zoom_shift_y[timeline_point])
+                    
+                    
+                        # Convert image back to a tensor again
+                        pil_tensor = TF.to_tensor(pil_image_zoom)
+                        
+                        # Re-encode
+                        z, *_ = model.encode(pil_tensor.to(device).unsqueeze(0) * 2 - 1)
+                        z_orig = z.clone()
+                        z.requires_grad_(True)
+
+                        # Re-create optimiser
+                        opt = get_opt(args.optimiser, args.step_size)
+
+                    # Frames since last point of the timeline
+                    timeline_frame += 1
+                    timeline_frame_i = 1
+
+                    # Next
+                    j += 1
+                else:
+                    timeline_frame_i += 1
+
+
+
+                if timeline_frame >= timeline.frames[timeline_point]:
+                    # End
+                    if timeline_point + 1 == len(timeline.frames):
+                        # we're done
+                        break
+                    else:
+                        timeline_point += 1
+                    timeline_frame = 0
+                    
+                    # Set new prompt if the prompt is diffrent
+                    if timeline.prompt[timeline_point] != timeline.prompt[timeline_point - 1]:
+                        pMs = []
+
+                        # Show user we're changing prompt                                
+                        print(timeline.prompt[timeline_point])
+
+                        #Can still add option for multiple prompts and weighted prompts
+                        #for prompt in timeline.prompt[timelinePoint]:
+                        txt, weight, stop = split_prompt(timeline.prompt[timeline_point])
+                        embed = perceptor.encode_text(clip.tokenize(txt).to(device)).float()
+                        pMs.append(Prompt(embed, weight, stop).to(device))
+                
+
+                i += 1
+                pbar.update()
+                
+                # The Timeline does not use any of the other code. So it should be skipped
+                continue
+
+
+
             # Change generated image
             if args.make_zoom_video:
                 if i % args.zoom_frequency == 0:
@@ -812,6 +1004,8 @@ try:
                     # Next
                     j += 1
             
+
+
             # Change text prompt
             if args.prompt_frequency > 0:
                 if i % args.prompt_frequency == 0 and i > 0:
@@ -860,7 +1054,7 @@ try:
 
             # Training time
             train(i)
-            
+
             # Ready to stop yet?
             if i == args.max_iterations:
                 if not args.video_style_dir:
@@ -915,9 +1109,9 @@ except KeyboardInterrupt:
 # All done :)
 
 # Video generation
-if args.make_video or args.make_zoom_video:
+if args.make_video or args.make_zoom_video or args.timeline_file:
     init_frame = 1      # Initial video frame
-    if args.make_zoom_video:
+    if args.make_zoom_video or args.timeline_file:
         last_frame = j
     else:
         last_frame = i  # This will raise an error if that number of frames does not exist.
